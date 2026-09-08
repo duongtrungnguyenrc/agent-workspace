@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatStatus, formatType, parentLabel } from "../lib/format";
 import type {
   GroupBy,
@@ -25,6 +25,8 @@ interface Group {
   status?: TicketStatus;
   tickets: TicketListItem[];
 }
+
+const TICKETS_PER_BATCH = 20;
 
 function groupsFor(props: KanbanBoardProps): Group[] {
   if (props.groupBy === "type") {
@@ -100,73 +102,137 @@ export function KanbanBoard(props: KanbanBoardProps) {
   return (
     <section className="flex gap-4 overflow-x-auto pb-3">
       {groups.map((group) => (
-        <article
-          className={`min-h-[420px] w-[304px] shrink-0 rounded-2xl border bg-white/90 p-3 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_16px_40px_rgb(15_23_42/0.04)] transition ${isStatusBoard ? "border-dashed" : ""} ${dragTarget === group.key ? "border-violet-500 bg-violet-50 ring-2 ring-violet-200" : "border-neutral-200/80"}`}
+        <KanbanGroup
+          group={group}
+          isStatusBoard={isStatusBoard}
+          isDragTarget={dragTarget === group.key}
+          allTickets={props.allTickets}
+          onOpen={props.onOpen}
+          onAction={props.onAction}
+          onMove={props.onMove}
+          onDragTarget={setDragTarget}
           key={group.key}
-          onDragOver={(event) => {
-            if (!group.status) return;
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "move";
-            setDragTarget(group.key);
-          }}
-          onDragEnter={(event) => {
-            if (!group.status) return;
-            event.preventDefault();
-            setDragTarget(group.key);
-          }}
-          onDragLeave={(event) => {
-            if (
-              !event.currentTarget.contains(event.relatedTarget as Node | null)
-            ) {
-              setDragTarget((current) =>
-                current === group.key ? null : current,
-              );
-            }
-          }}
-          onDrop={(event) => {
-            if (!group.status) return;
-            event.preventDefault();
-            setDragTarget(null);
-            const id = Number(event.dataTransfer.getData("text/plain"));
-            if (Number.isInteger(id)) props.onMove(id, group.status);
-          }}
-          onDragEnd={() => setDragTarget(null)}
-        >
-          <header className="flex items-center justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2">
-            <h2 className="m-0 min-w-0 truncate text-sm font-bold text-neutral-950">
-              {group.label}
-            </h2>
-
-            <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-neutral-600 shadow-sm">
-              {group.tickets.length}
-            </span>
-          </header>
-
-          {isStatusBoard ? (
-            <div className={`my-3 rounded-xl border border-dashed px-3 py-2 text-center text-xs font-semibold transition ${dragTarget === group.key ? "border-violet-300 bg-white text-violet-700" : "border-neutral-200 bg-neutral-50 text-neutral-500"}`}>
-              Drop to set {group.label}
-            </div>
-          ) : null}
-
-          <div className="grid gap-3">
-            {group.tickets.length ? (
-              group.tickets.map((ticket) => (
-                <TicketCard
-                  key={ticket.id}
-                  ticket={ticket}
-                  tickets={props.allTickets}
-                  onOpen={props.onOpen}
-                  onAction={props.onAction}
-                />
-              ))
-            ) : (
-              <div className="rounded-xl border border-dashed border-neutral-200 bg-neutral-50 p-4 text-center text-sm font-medium text-neutral-500">
-                {isStatusBoard ? "Drop tickets here" : "No tickets"}
-              </div>
-            )}
-          </div>
-        </article>
+        />
       ))}
     </section>
+  );
+}
+
+interface KanbanGroupProps {
+  group: Group;
+  isStatusBoard: boolean;
+  isDragTarget: boolean;
+  allTickets: TicketListItem[];
+  onOpen: (id: number) => void;
+  onMove: (id: number, status: TicketStatus) => void;
+  onAction: (id: number, action: string) => Promise<void>;
+  onDragTarget: (key: string | null) => void;
+}
+
+function KanbanGroup({
+  group,
+  isStatusBoard,
+  isDragTarget,
+  allTickets,
+  onOpen,
+  onMove,
+  onAction,
+  onDragTarget,
+}: KanbanGroupProps) {
+  const [visibleCount, setVisibleCount] = useState(TICKETS_PER_BATCH);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const visibleTickets = group.tickets.slice(0, visibleCount);
+  const hasMore = visibleTickets.length < group.tickets.length;
+  const ticketIdentity = group.tickets.map((ticket) => ticket.id).join(",");
+
+  useEffect(() => {
+    setVisibleCount(TICKETS_PER_BATCH);
+  }, [group.key, ticketIdentity]);
+
+  useEffect(() => {
+    const loadMore = loadMoreRef.current;
+    if (!loadMore || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisibleCount((count) => count + TICKETS_PER_BATCH);
+        }
+      },
+      { root: scrollContainerRef.current, rootMargin: "240px 0px" },
+    );
+
+    observer.observe(loadMore);
+    return () => observer.disconnect();
+  }, [hasMore, visibleTickets.length]);
+
+  return (
+    <article
+      className={`flex h-[calc(100vh-12rem)] min-h-105 max-h-180 w-76 shrink-0 flex-col rounded-2xl border bg-white/90 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_16px_40px_rgb(15_23_42/0.04)] transition ${isStatusBoard ? "border-dashed" : ""} ${isDragTarget ? "border-violet-500 bg-violet-50 ring-2 ring-violet-200" : "border-neutral-200/80"}`}
+      onDragOver={(event) => {
+        if (!group.status) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        onDragTarget(group.key);
+      }}
+      onDragEnter={(event) => {
+        if (!group.status) return;
+        event.preventDefault();
+        onDragTarget(group.key);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          onDragTarget(null);
+        }
+      }}
+      onDrop={(event) => {
+        if (!group.status) return;
+        event.preventDefault();
+        onDragTarget(null);
+        const id = Number(event.dataTransfer.getData("text/plain"));
+        if (Number.isInteger(id)) onMove(id, group.status);
+      }}
+      onDragEnd={() => onDragTarget(null)}
+    >
+      <header className="p-3 flex shrink-0 items-center justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2">
+        <h2 className="m-0 min-w-0 truncate text-sm font-bold text-neutral-950">
+          {group.label}
+        </h2>
+
+        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-neutral-600 shadow-sm">
+          {group.tickets.length}
+        </span>
+      </header>
+
+      {isStatusBoard ? (
+        <div
+          className={`my-3 mx-3 shrink-0 rounded-md border border-dashed px-3 py-2 text-center text-xs font-semibold transition ${isDragTarget ? "border-violet-300 bg-white text-violet-700" : "border-gray-200 bg-gray-50 text-gray-500"}`}
+        >
+          Drop to set {group.label}
+        </div>
+      ) : null}
+
+      <div
+        className="min-h-0 flex-1 overflow-y-auto pr-1 px-3"
+        ref={scrollContainerRef}
+      >
+        <div className="grid gap-3">
+          {visibleTickets.map((ticket) => (
+            <TicketCard
+              key={ticket.id}
+              ticket={ticket}
+              tickets={allTickets}
+              onOpen={onOpen}
+              onAction={onAction}
+            />
+          ))}
+
+          {hasMore ? (
+            <div aria-hidden="true" className="h-2" ref={loadMoreRef} />
+          ) : null}
+        </div>
+      </div>
+    </article>
   );
 }

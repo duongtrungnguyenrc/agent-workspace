@@ -67,41 +67,65 @@ This script will:
 
 After running it, reload VS Code to ensure the agents, tasks, and rules are recognized.
 
-## Workflow for Creating a New Project
+## Workflow
 
-When you want to build a new project in this workspace, the recommended workflow is:
+The workspace separates product definition from implementation. Vibe Kanban is the
+control plane, while CodeGraph and AgentMemory provide codebase and project context.
 
-1. Check preconditions
-   - enable auto tasks in VS Code
-   - make sure Git, Node, pnpm, and required tools are ready
+```mermaid
+flowchart TD
+    A[User request] --> B{Request type}
 
-2. Run setup
-   - execute `./scripts/setup.sh`
+    B -->|Build story or product docs| C[product-doc-stories]
+    C --> D[Create or update US]
+    D --> E[Create use_case children]
+    E --> F[Stop for user review]
 
-3. Create the project structure / workspace
-   - create a project folder under `source/` or in a separate workspace if needed
-   - prepare `AGENTS.md`, `DESIGN.md`, and other necessary configuration files
+    B -->|Implement US, use_case, or feedback| G[product-doc-implementer]
+    G --> H{External source ticket?}
+    H -->|Yes| I[Fetch source ticket]
+    H -->|No| J[Read Vibe Kanban ticket]
+    I --> K[Store source snapshot]
+    J --> L[Read ticket context]
+    K --> M[AgentMemory lookup]
+    L --> M
+    M --> N[CodeGraph exploration]
+    N --> O[Create or update task and execution plan]
+    O --> F
 
-4. Create tickets / stories / use cases
-   - use Vibe Kanban to break requirements into user stories, use cases, and tasks
-   - do not start coding before the scope is clear
+    B -->|Implement approved task| P[Read task]
+    P --> Q{Approved with execution plan?}
+    Q -->|No| F
+    Q -->|Yes| R[Use git-workflow]
+    R --> S[Create branch from develop]
+    S --> T[Record branch and base commit]
+    T --> U[Validate plan against source]
+    U --> V{Plan still valid?}
+    V -->|No| W[Update plan and stop for review]
+    V -->|Yes| X[Start task]
+    X --> Y[Implement approved plan]
+    Y --> Z[Focused verification]
+    Z --> AA[Commit changes and record commit]
+    AA --> AB{Local review needed?}
+    AB -->|Yes| AC[Stop for local review]
+    AC --> AD[User confirms]
+    AB -->|No| AE[Create PR with gh]
+    AD --> AE
+    AE --> AF[Record PR, pipeline, and actions]
+    AF --> AG[Move task to review]
+    AG --> AH[Close after merge or acceptance]
+```
 
-5. Analyze the project with AI
-   - use CodeGraph to understand the project structure
-   - use AgentMemory to store context, decisions, and learned patterns
+### New project sequence
 
-6. Implement according to approved tasks
-   - follow the task execution plan
-   - keep the scope tight and avoid expanding beyond the approved plan
-
-7. Verify + review + commit
-   - run the appropriate validation/tests
-   - review the diff
-   - commit in a task-scoped manner
-
-8. Create a PR if needed
-   - push the branch
-   - create a PR using the GitHub CLI or your team workflow
+1. Check prerequisites: VS Code auto tasks, Git, Node.js, pnpm, and required tools.
+2. Run `./scripts/setup.sh` from the workspace root.
+3. Create the project under `source/` or in a separate workspace.
+4. Define stories and use cases in Vibe Kanban before coding.
+5. Analyze the codebase with CodeGraph and preserve context with AgentMemory.
+6. Implement only approved task execution plans.
+7. Run focused verification, review the diff, and commit scoped changes.
+8. Push the branch and create a PR with GitHub CLI when required.
 
 ## Workspace Structure
 

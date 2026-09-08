@@ -1,0 +1,5 @@
+interface:
+  display_name: "Auto US"
+  short_description: "Infer US/use case tickets from project structure"
+policy:
+  allow_implicit_invocation: false

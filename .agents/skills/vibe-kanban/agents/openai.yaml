@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vibe Kanban"
+  short_description: "Plan and track agent implementation tickets"
+  default_prompt: "Use $vibe-kanban to turn product requirements into linked US/use_case tickets; create approval-ready task plans only after implementation is requested and the current codebase is scanned."

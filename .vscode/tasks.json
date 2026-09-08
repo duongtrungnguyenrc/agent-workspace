@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Agent Memory",
+      "type": "shell",
+      "command": "agentmemory",
+      "args": [
+        "start"
+      ],
+      "isBackground": true,
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Start Vibe Kanban UI",
+      "type": "shell",
+      "command": "node",
+      "args": [
+        "${workspaceFolder}/.agents/skills/vibe-kanban/scripts/vibe-kanban.mjs",
+        "serve"
+      ],
+      "isBackground": true,
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Product Doc Stories"
+  short_description: "Write story docs directly in Vibe Kanban"

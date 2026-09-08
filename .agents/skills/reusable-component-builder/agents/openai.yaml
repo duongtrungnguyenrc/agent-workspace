@@ -1,0 +1,3 @@
+interface:
+  display_name: "Reusable Component Builder"
+  short_description: "Create reusable React components with typed APIs and clear ownership"

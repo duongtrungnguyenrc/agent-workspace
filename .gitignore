@@ -1,0 +1,11 @@
+.DS_Store
+
+node_modules/
+**/node_modules/
+
+.codegraph/
+.claude/
+.codex/
+.vibe-kanban/*.sqlite
+
+.agents/skills/*/assets/dist/

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Git Workflow"
+  short_description: "Branch, commit, review, and PR workflow for agent changes"

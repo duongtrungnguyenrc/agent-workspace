@@ -5,9 +5,6 @@
       "label": "Start Agent Memory",
       "type": "shell",
       "command": "agentmemory",
-      "args": [
-        "start"
-      ],
       "isBackground": true,
       "runOptions": {
         "runOn": "folderOpen"

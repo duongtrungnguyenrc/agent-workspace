@@ -1,0 +1,3 @@
+interface:
+  display_name: "Design Collector"
+  short_description: "Extract project design language into DESIGN.md format"

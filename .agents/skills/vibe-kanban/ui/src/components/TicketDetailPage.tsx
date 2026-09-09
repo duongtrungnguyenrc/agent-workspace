@@ -14,7 +14,7 @@ interface TicketDetailPageProps {
   onBack: () => void;
   onOpen: (id: number) => void;
   onMove: (id: number, status: TicketStatus) => Promise<void>;
-  onAction: (id: number, action: string) => Promise<void>;
+  onAction: (id: number, action: string, body?: Record<string, unknown>) => Promise<void>;
   onSave: (id: number, data: Record<string, FormDataEntryValue | string>) => Promise<void>;
 }
 
@@ -40,12 +40,20 @@ function eventSummary(payload: Record<string, unknown>) {
   const percent = typeof payload.percent === "number" ? `${payload.percent}%` : "";
   const from = typeof payload.from === "string" ? formatStatus(payload.from) : "";
   const to = typeof payload.to === "string" ? formatStatus(payload.to) : "";
+  const comment = typeof payload.comment === "string" ? payload.comment.trim() : "";
+  const questions = typeof payload.questions === "string" ? payload.questions.trim() : "";
   return [
     from && to ? `${from} -> ${to}` : "",
     step ? `Step: ${step}` : "",
     percent ? `Progress: ${percent}` : "",
+    comment,
+    questions,
     description,
   ].filter(Boolean).join(" - ");
+}
+
+function textValue(value: string | null | undefined) {
+  return value || "";
 }
 
 function ActionButton({ id, action, label, disabled, title, onAction }: { id: number; action: string; label: string; disabled?: boolean; title?: string; onAction: (id: number, action: string) => Promise<void> }) {
@@ -65,15 +73,23 @@ function ActionButton({ id, action, label, disabled, title, onAction }: { id: nu
 export function TicketDetailPage({ ticket, tickets, statuses, types, onBack, onOpen, onMove, onAction, onSave }: TicketDetailPageProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editType, setEditType] = useState<TicketType>(ticket.type);
+  const [comment, setComment] = useState("");
   const parents = eligibleParents(editType, tickets, ticket.id);
   const progress = progressFor(ticket);
   const isTask = ticket.type === "task";
   const needsApproval = isTask && !ticket.user_reviewed;
-  const hasExecutionPlan = ticket.execution_plan.trim().length > 0;
+  const specification = textValue(ticket.specification);
+  const executionPlan = textValue(ticket.execution_plan);
+  const sourceSnapshot = textValue(ticket.source_snapshot);
+  const actionItems = textValue(ticket.action_items);
+  const userComments = textValue(ticket.user_comments);
+  const openQuestions = textValue(ticket.open_questions);
+  const hasExecutionPlan = executionPlan.trim().length > 0;
 
   useEffect(() => {
     setIsEditing(false);
     setEditType(ticket.type);
+    setComment("");
   }, [ticket.id, ticket.type]);
 
   return (
@@ -150,6 +166,13 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, onBack, onO
             <Property label="Pipeline" value={ticket.pipeline_status} />
           </section>
 
+          {openQuestions.trim() ? (
+            <section className={panelClass}>
+              <h2 className="mb-3 text-base font-bold text-neutral-950">Open questions</h2>
+              <Markdown value={openQuestions} />
+            </section>
+          ) : null}
+
           <section className={panelClass}>
             <h2 className="mb-3 text-base font-bold text-neutral-950">Child tickets</h2>
             {ticket.children.length ? (
@@ -172,7 +195,7 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, onBack, onO
             <Property label="Source type" value={ticket.source_type} />
             <Property label="Source id" value={ticket.source_id} />
             <Property label="Source URL" value={ticket.source_url} />
-            <p className="mt-3 max-h-44 overflow-auto rounded-lg bg-neutral-50 p-3 text-sm leading-6 text-neutral-600">{ticket.source_snapshot || "No source snapshot provided."}</p>
+            <p className="mt-3 max-h-44 overflow-auto rounded-lg bg-neutral-50 p-3 text-sm leading-6 text-neutral-600">{sourceSnapshot || "No source snapshot provided."}</p>
           </section>
         </aside>
 
@@ -232,12 +255,12 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, onBack, onO
               <div className={`grid gap-3 ${editType === "task" ? "xl:grid-cols-2" : ""}`}>
                 <label className={fieldClass}>
                   <span>Specification</span>
-                  <textarea className={textareaClass} name="specification" rows={10} defaultValue={ticket.specification} />
+                  <textarea className={textareaClass} name="specification" rows={10} defaultValue={specification} />
                 </label>
                 {editType === "task" ? (
                   <label className={fieldClass}>
                     <span>Execution plan</span>
-                    <textarea className={textareaClass} name="execution_plan" rows={10} defaultValue={ticket.execution_plan} />
+                    <textarea className={textareaClass} name="execution_plan" rows={10} defaultValue={executionPlan} />
                   </label>
                 ) : null}
               </div>
@@ -257,7 +280,7 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, onBack, onO
               </div>
               <label className={fieldClass}>
                 <span>Source snapshot</span>
-                <textarea className={textareaClass} name="source_snapshot" rows={5} defaultValue={ticket.source_snapshot} />
+                <textarea className={textareaClass} name="source_snapshot" rows={5} defaultValue={sourceSnapshot} />
               </label>
               <div className="grid gap-3 xl:grid-cols-3">
                 <label className={fieldClass}>
@@ -285,8 +308,18 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, onBack, onO
               </div>
               <label className={fieldClass}>
                 <span>Action items</span>
-                <textarea className={textareaClass} name="action_items" rows={4} defaultValue={ticket.action_items} />
+                <textarea className={textareaClass} name="action_items" rows={4} defaultValue={actionItems} />
               </label>
+              <div className="grid gap-3 xl:grid-cols-2">
+                <label className={fieldClass}>
+                  <span>User comments</span>
+                  <textarea className={textareaClass} name="user_comments" rows={5} defaultValue={userComments} />
+                </label>
+                <label className={fieldClass}>
+                  <span>Open questions</span>
+                  <textarea className={textareaClass} name="open_questions" rows={5} defaultValue={openQuestions} />
+                </label>
+              </div>
               <div className="flex justify-end">
                 <button className={`${buttonClass} border-violet-600 bg-violet-600 text-white hover:bg-violet-700`} type="submit">
                   Save changes
@@ -297,12 +330,46 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, onBack, onO
 
           <section className={panelClass}>
             <h2 className="mb-3 text-base font-bold text-neutral-950">Ticket specification</h2>
-            <Markdown value={ticket.specification} />
+            <Markdown value={specification} />
           </section>
           {isTask ? (
             <section className={panelClass}>
               <h2 className="mb-3 text-base font-bold text-neutral-950">Execution plan</h2>
-              <Markdown value={ticket.execution_plan} />
+              <Markdown value={executionPlan} />
+            </section>
+          ) : null}
+          {needsApproval ? (
+            <section className={panelClass}>
+              <h2 className="mb-3 text-base font-bold text-neutral-950">User review comment</h2>
+              <form
+                className="grid gap-3"
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  const value = comment.trim();
+                  if (!value) return;
+                  await onAction(ticket.id, "comment", { comment: value, actor: "user" });
+                  setComment("");
+                }}
+              >
+                <textarea
+                  className={textareaClass}
+                  value={comment}
+                  rows={4}
+                  placeholder="Add feedback before approval"
+                  onChange={(event) => setComment(event.target.value)}
+                />
+                <div className="flex justify-end">
+                  <button className={`${buttonClass} border-violet-600 bg-violet-600 text-white hover:bg-violet-700`} type="submit">
+                    Add comment
+                  </button>
+                </div>
+              </form>
+            </section>
+          ) : null}
+          {userComments.trim() ? (
+            <section className={panelClass}>
+              <h2 className="mb-3 text-base font-bold text-neutral-950">User comments</h2>
+              <Markdown value={userComments} />
             </section>
           ) : null}
           <section className={panelClass}>
@@ -343,10 +410,10 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, onBack, onO
               <Property label="Pipeline" value={ticket.pipeline_status} />
               <Property label="Pipeline URL" value={ticket.pipeline_url} />
             </div>
-            {ticket.action_items.trim() ? (
+            {actionItems.trim() ? (
               <div className="mt-3 rounded-lg bg-neutral-50 p-3">
                 <h3 className="m-0 mb-2 text-xs font-bold uppercase text-neutral-500">Action items</h3>
-                <Markdown value={ticket.action_items} />
+                <Markdown value={actionItems} />
               </div>
             ) : null}
           </section>

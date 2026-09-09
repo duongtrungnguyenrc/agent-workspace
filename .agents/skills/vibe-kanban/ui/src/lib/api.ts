@@ -25,9 +25,11 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     }),
-  action: (id: number, action: string) =>
+  action: (id: number, action: string, body?: Record<string, unknown>) =>
     request<TicketDetail>(`/api/tickets/${id}/${action}`, {
       method: "POST",
+      headers: body ? { "content-type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
     }),
   moveTicket: (id: number, status: string) =>
     request<TicketDetail>(`/api/tickets/${id}/move`, {

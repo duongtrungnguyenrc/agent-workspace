@@ -18,6 +18,8 @@ export interface TicketListItem {
   source_id: string | null;
   source_url: string | null;
   source_snapshot: string;
+  user_comments: string;
+  open_questions: string;
   branch: string | null;
   base_commit: string | null;
   head_commit: string | null;

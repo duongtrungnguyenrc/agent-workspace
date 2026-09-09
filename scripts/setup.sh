@@ -15,11 +15,12 @@ mkdir -p .claude/rules
 mkdir -p .codex/skills
 mkdir -p .codex/rules
 mkdir -p .vibe-kanban
+rm -rf .vibe-kanban/vibe-kanban.sqlite && touch .vibe-kanban/vibe-kanban.sqlite
 
 echo "==> Installing dependencies"
 pnpm install --frozen-lockfile
 
-rm -rf .vibe-kanban/vibe-kanban.sqlite && touch .vibe-kanban/vibe-kanban.sqlite
+pnpm --filter vibe-kanban run build
 
 echo "==> Validating CodeGraph"
 
@@ -96,7 +97,5 @@ for f in .agents/rules/*; do
   ln -sfn "../../.agents/rules/$name" ".claude/rules/$name"
   ln -sfn "../../.agents/rules/$name" ".codex/rules/$name"
 done
-
-cd 
 
 echo "==> Agent setup completed, please reload VS Code to ensure the agents are properly initialized."

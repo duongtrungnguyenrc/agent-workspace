@@ -9,11 +9,15 @@ function payloadSummary(payload: Record<string, unknown>) {
   const percent = typeof payload.percent === "number" ? `${payload.percent}%` : "";
   const from = typeof payload.from === "string" ? formatStatus(payload.from) : "";
   const to = typeof payload.to === "string" ? formatStatus(payload.to) : "";
-  if (description || step || percent || (from && to)) {
+  const comment = typeof payload.comment === "string" ? payload.comment.trim() : "";
+  const questions = typeof payload.questions === "string" ? payload.questions.trim() : "";
+  if (description || step || percent || comment || questions || (from && to)) {
     return [
       from && to ? `Status ${from} -> ${to}` : "",
       step ? `Step: ${step}` : "",
       percent ? `Progress: ${percent}` : "",
+      comment ? `Comment: ${comment}` : "",
+      questions ? `Questions: ${questions}` : "",
       description ? `Description: ${description}` : "",
     ].filter(Boolean).join(" - ");
   }

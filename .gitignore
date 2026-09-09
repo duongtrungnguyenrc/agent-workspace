@@ -8,4 +8,6 @@ node_modules/
 .codex/
 .vibe-kanban/*.sqlite
 
+source/*
+
 .agents/skills/*/assets/dist/

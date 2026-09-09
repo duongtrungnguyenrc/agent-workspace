@@ -15,6 +15,8 @@ The tool should help an agent and user trace an implementation through:
 - Git commits
 - pull requests
 - pipelines and external actions
+- user review comments
+- open questions
 - activity history
 - global activity logs
 
@@ -105,6 +107,8 @@ Not allowed before task approval:
 
 If the execution plan changes after approval, set `user_reviewed` back to `false` and record an activity event. The user must approve the new plan before implementation continues.
 
+Pending approval should allow user comments without approving the task. Store those comments on `user_comments` and record a `ticket.user_commented` event. When the agent has unresolved questions that block accurate planning or implementation, store them in `open_questions`, move the ticket to `hold`, and record a `ticket.questions_opened` event.
+
 ## Ticket Content
 
 ### Source Ticket
@@ -116,6 +120,8 @@ source_type
 source_id
 source_url
 source_snapshot
+user_comments
+open_questions
 ```
 
 When a user provides one or more source tickets, the agent should fetch/explore those source tickets with the relevant user-provided skill or tool, then create or update one or more Vibe Kanban `task` work tickets. Do not create mirrored Vibe Kanban tickets solely to represent external source tickets.
@@ -207,6 +213,8 @@ ticket.commit_added
 ticket.pr_updated
 ticket.pipeline_updated
 ticket.action_logged
+ticket.user_commented
+ticket.questions_opened
 ticket.review_requested
 ticket.closed
 ```
@@ -242,6 +250,7 @@ Expose simple commands an agent can use:
 
 ```bash
 vibe-kanban list
+vibe-kanban smart-search "<query>" --parent-for task --json
 vibe-kanban get <ticket-id>
 vibe-kanban create
 vibe-kanban create --type use_case --parent-id <story-ticket-id>
@@ -250,6 +259,8 @@ vibe-kanban create --type task --source-type jira --source-id PROJ-123 --source-
 vibe-kanban create --type uat_feedback --title <feedback-group>
 vibe-kanban update <ticket-id>
 vibe-kanban approve <ticket-id> --description <text> --quiet
+vibe-kanban comment <ticket-id> --comment <text> --actor user --quiet
+vibe-kanban questions <ticket-id> --questions <text> --description <text> --quiet
 vibe-kanban start <ticket-id> --description <text> --quiet
 vibe-kanban progress <ticket-id> --percent <0-100> --note <text> --description <text> --quiet
 vibe-kanban progress-log <ticket-id> --step <name> --description <text> --percent <0-100> --quiet
@@ -266,11 +277,16 @@ Support JSON output for agent-facing reads:
 
 ```bash
 vibe-kanban get <ticket-id> --json
+vibe-kanban smart-search "<query>" --json
 ```
 
 JSON should include enough ticket, specification, plan, approval, status, Git, and event information for an agent to continue work without parsing HTML.
 
+`smart-search` is a read-only agent discovery command. It should rank tickets by matches across title, source fields, raw requirement, specification, execution plan, source snapshot, action items, and branch. Results should include the matched ticket summary plus parent and child summaries so agents can find related context without needing multiple follow-up reads. Support `--parent-for <type>` to return only tickets that are valid parents for that ticket type, such as `--parent-for task` when the agent is deciding where to link an implementation task. Also support `--type`, `--status`, and `--limit` for focused lookup.
+
 The `approve` and `start` commands must apply only to `task` tickets. The `start` command must enforce the approval gate: if the current execution plan is not approved, fail with a clear message and leave the ticket unchanged.
+
+The `comment` command appends a timestamped user comment and should not change approval state by itself. The `questions` command replaces the current open questions, moves the ticket to `hold`, and preserves the blocking questions for the user and agent. Agents should use any available human-notification skill or tool after writing open questions; if none exists, the current conversation is the fallback notification channel.
 
 Status-changing commands should accept `--description <text|@file>` so agents can explain why a ticket moved. `progress-log` records an implementation activity after a meaningful plan step; it should require a description, optionally update `progress_percent`, record `ticket.progress_logged`, and produce no CLI output by default unless `--json` is requested.
 
@@ -290,6 +306,8 @@ The UI should provide:
 - Markdown rendering
 - ticket status
 - review and approval state
+- pending-approval user comment form
+- open questions
 - task-only execution plan display and editing
 - Git trace
 - PR, pipeline, and action trace
@@ -315,6 +333,8 @@ When building the tool, verify the meaningful invariants:
 - a new ticket starts unapproved
 - implementation cannot start before plan approval
 - changing the plan after approval invalidates approval
+- pending approval accepts user comments without approving the task
+- open questions move the ticket to hold and remain visible on detail pages
 - supported status moves work in both directions
 - unsupported status values fail clearly
 - JSON output contains enough state for agent continuation

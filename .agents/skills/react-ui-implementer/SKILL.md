@@ -1,5 +1,5 @@
 ---
-name: ui-implementation
+name: react-ui-implementer
 description: Implement frontend UI tasks using the project DESIGN.md, available taste skills, existing reusable components, and ReactBits MCP components when they improve fit or speed.
 ---
 
@@ -32,4 +32,5 @@ If ReactBits MCP is unavailable, continue with existing local components and nor
 - Split reusable pieces by stable responsibility: primitives in `src/shared/ui`, app providers in `src/app/providers`, feature-specific components near the feature or route that owns them.
 - Avoid adding a new abstraction for a single tiny element unless it is clearly part of a repeated pattern.
 - Preserve the approved product scope. ReactBits and taste guidance improve execution; they do not authorize adding unrelated animations, sections, or features.
+- Stop and ask the user if UI analysis exposes materially different product behavior, information architecture, permission visibility, interaction model, or visual direction that is not resolved by the approved task or `DESIGN.md`.
 - Verify responsive behavior, empty/loading/error states, keyboard interaction, and text overflow for any new UI surface.

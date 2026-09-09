@@ -1,11 +1,13 @@
 ---
-name: product-doc-stories
+name: documenter
 description: Create and update product stories, use cases, feedback groups, and work-ticket documentation directly in Vibe Kanban.
 ---
 
-# Product Doc Stories
+# Documenter
 
 Use this skill when the user asks to create, organize, or update product documentation, user stories, use cases, scenarios, requirements, acceptance criteria, or story planning.
+
+Use `documenter` for user-provided product requirements. If the user explicitly asks to infer or bootstrap stories from an existing codebase, use `auto-us` instead so CodeGraph-driven feature discovery happens first.
 
 All product documentation for this workflow lives in Vibe Kanban tickets. Do not create, update, or manage `documents/**`, `document.md`, product-doc `progress.md`, `.agents/processes/**/plan.md`, or `.agents/processes/**/progress.md` files for story work.
 
@@ -14,7 +16,7 @@ All product documentation for this workflow lives in Vibe Kanban tickets. Do not
 Use the project-local Vibe Kanban tool from the project root:
 
 ```bash
-node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs <command>
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs <command>
 ```
 
 Model product documentation as linked tickets:
@@ -38,6 +40,14 @@ Distinguish source tickets from agent work tickets. If the user provides Jira, e
 
 Not every request needs a `US -> use_case` hierarchy. Use `US/use_case` for product stories and user-facing capabilities. If the user is organizing UAT feedback, QC feedback, technical maintenance, or standalone source-ticket-driven work, ask before forcing it into a user story. Use top-level `task`, `uat_feedback`, or `qc_feedback` tickets when that better represents the user's source material.
 
+## Analysis Checkpoints
+
+During story analysis, stop and ask the user before creating or updating tickets when the source material contains materially different possible intents, conflicting actors or goals, unclear ticket hierarchy, acceptance criteria that could change product behavior, or open product/UX/data questions that would make the story misleading.
+
+Ask one concise question that names the tradeoff or options. If the uncertainty is minor and does not affect product meaning, proceed with a documented assumption in the ticket `specification` instead of blocking.
+
+When the question belongs to an existing ticket, record it with `node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs questions <ticket-id> --questions "<markdown questions>" --description "Blocked pending user clarification" --quiet` so the ticket moves to `hold`. If a human-notification skill/tool is available, trigger it after recording the questions; otherwise ask in the current chat.
+
 ## Create Story Workflow
 
 1. Normalize the user's raw notes into a concise product story structure.
@@ -45,21 +55,23 @@ Not every request needs a `US -> use_case` hierarchy. Use `US/use_case` for prod
 3. Create the `US` ticket first:
 
    ```bash
-   node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type US --title "<story title>" --specification "<story markdown>"
+   node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type US --title "<story title>" --specification "<story markdown>"
    ```
 
 4. Create each `use_case` ticket under the `US` ticket. Reuse the same `<us-ticket-id>` for every use case that belongs to that story:
 
    ```bash
-   node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type use_case --parent-id <us-ticket-id> --title "<Verb Noun>" --specification "<use case markdown>"
+   node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type use_case --parent-id <us-ticket-id> --title "<Verb Noun>" --specification "<use case markdown>"
    ```
 
 5. Return the created ticket IDs and hierarchy to the user. Group the response by `US -> use_case[]`; do not include `task[]` unless task tickets already existed before the story update.
 6. Do not implement code during this workflow.
 
-Task tickets are intentionally deferred. If the user asks to execute a `US` or `use_case`, switch to the implementation workflow: scan the current project, then create or update the smallest reviewable `task` tickets with execution plans for approval. Actual code changes, branch checkout, commits, local review before PR, and GitHub CLI PR creation belong to `product-doc-implementer` plus `git-workflow`, not the story-building workflow.
+Task tickets are intentionally deferred. If the user asks to execute a `US` or `use_case`, switch to the implementation workflow: scan the current project, then create or update the smallest reviewable `task` tickets with execution plans for approval. Actual code changes, branch checkout, commits, local review before PR, and GitHub CLI PR creation belong to `task-implementer` plus `git-workflow`, not the story-building workflow.
 
 If the user asks to update existing story docs, read the relevant Vibe Kanban ticket tree with `get <id> --json`, then update ticket fields through Vibe Kanban. Preserve existing parent-child links unless the user asks to reorganize the story. If an approved task execution plan changes, tell the user the task must be reviewed again before implementation.
+
+When updating or reorganizing existing tickets, use Vibe Kanban `smart-search` to find related stories, use cases, source ids, and likely parents before asking the user for IDs. Ask only when several plausible matches remain.
 
 ## Writing Standard
 

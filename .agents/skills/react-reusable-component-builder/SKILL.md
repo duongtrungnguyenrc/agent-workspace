@@ -1,5 +1,5 @@
 ---
-name: reusable-component-builder
+name: react-reusable-component-builder
 description: Design, extract, or refactor reusable React components with clear ownership, typed APIs, Tailwind-friendly styling, and minimal duplication.
 ---
 
@@ -24,6 +24,8 @@ Create or extract a reusable component when at least one is true:
 - A route/page is becoming hard to scan because presentation logic dominates composition.
 
 Do not extract a component just to reduce a few lines of simple one-off markup.
+
+Stop and ask the user before proceeding when component analysis reveals materially different ownership boundaries, public APIs, styling systems, accessibility behavior, or cross-feature impacts that would change the approved scope or create migration risk.
 
 ## API Shape
 

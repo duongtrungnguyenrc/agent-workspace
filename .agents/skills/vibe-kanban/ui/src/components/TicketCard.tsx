@@ -23,7 +23,7 @@ export function TicketCard({ ticket, tickets, onOpen, onAction }: TicketCardProp
   const [dragging, setDragging] = useState(false);
   const needsApproval = ticket.type === "task" && !ticket.user_reviewed;
 
-  const hasExecutionPlan = ticket.execution_plan.trim().length > 0;
+  const hasExecutionPlan = String(ticket.execution_plan || "").trim().length > 0;
 
   return (
     <button

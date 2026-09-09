@@ -141,6 +141,8 @@ export default function App() {
         ticket.pipeline_status,
         ticket.pipeline_url,
         ticket.action_items,
+        ticket.user_comments,
+        ticket.open_questions,
         ticket.specification,
         ticket.execution_plan,
         ticket.source_type,
@@ -180,9 +182,9 @@ export default function App() {
   }, []);
 
   const runAction = useCallback(
-    async (id: number, action: string) => {
+    async (id: number, action: string, body?: Record<string, unknown>) => {
       try {
-        await api.action(id, action);
+        await api.action(id, action, body);
         await refreshAll();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Action failed");

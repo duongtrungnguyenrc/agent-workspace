@@ -28,10 +28,13 @@ vibe-kanban <command> [options]
 
 Commands:
   list [--json]
+  smart-search <query> [--json] [--type <type>] [--status <status>] [--parent-for <type>] [--limit <n>]
   get <ticket-id> [--json]
   create --title <title> [--raw-requirement <text|@file>] [--specification <text|@file>] [--execution-plan <text|@file>]
   update <ticket-id> [--title <title>] [--type <US|use_case|task|uat_feedback|qc_feedback>] [--parent-id <id>] [--specification <text|@file>] [--execution-plan <text|@file>]
   approve <ticket-id> [--actor <name>] [--description <text|@file>] [--quiet]
+  comment <ticket-id> --comment <text|@file> [--actor <name>] [--quiet]
+  questions <ticket-id> --questions <text|@file> [--description <text|@file>] [--quiet]
   start <ticket-id> [--description <text|@file>] [--quiet]
   progress <ticket-id> --percent <0-100> [--note <text|@file>] [--description <text|@file>] [--quiet]
   progress-log <ticket-id> --description <text|@file> [--step <name>] [--percent <0-100>] [--quiet]
@@ -50,6 +53,7 @@ Commands:
 
 Options:
   --type <US|use_case|task|uat_feedback|qc_feedback>
+  --status <open|in_progress|hold|cancelled|in_review|closed>
   --parent-id <id>
   --source-type <type>
   --source-id <id>
@@ -64,7 +68,14 @@ Options:
   --pipeline-status <status>
   --pipeline-url <url>
   --action-items <text|@file>
+  --user-comments <text|@file>
+  --open-questions <text|@file>
+  --comment <text|@file>
+  --questions <text|@file>
   --progress-percent <0-100>
+  --query <text>
+  --limit <n>
+  --parent-for <US|use_case|task|uat_feedback|qc_feedback>
 
 Database:
   Defaults to .vibe-kanban/vibe-kanban.sqlite. Override with VIBE_KANBAN_DB.
@@ -138,6 +149,8 @@ function openDb() {
       source_id TEXT,
       source_url TEXT,
       source_snapshot TEXT NOT NULL DEFAULT '',
+      user_comments TEXT NOT NULL DEFAULT '',
+      open_questions TEXT NOT NULL DEFAULT '',
       branch TEXT,
       base_commit TEXT,
       head_commit TEXT,
@@ -188,6 +201,8 @@ function openDb() {
   ensureColumn(db, "tickets", "pipeline_status", "TEXT");
   ensureColumn(db, "tickets", "pipeline_url", "TEXT");
   ensureColumn(db, "tickets", "action_items", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "tickets", "user_comments", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "tickets", "open_questions", "TEXT NOT NULL DEFAULT ''");
   return db;
 }
 
@@ -256,7 +271,17 @@ function currentGit() {
 
 function boolRow(row) {
   if (!row) return row;
-  return { ...row, user_reviewed: Boolean(row.user_reviewed) };
+  return {
+    ...row,
+    user_reviewed: Boolean(row.user_reviewed),
+    raw_requirement: row.raw_requirement || "",
+    specification: row.specification || "",
+    execution_plan: row.execution_plan || "",
+    source_snapshot: row.source_snapshot || "",
+    user_comments: row.user_comments || "",
+    open_questions: row.open_questions || "",
+    action_items: row.action_items || "",
+  };
 }
 
 function recordEvent(db, ticketId, type, payload = {}, actor = "agent") {
@@ -289,6 +314,132 @@ function listTickets(db) {
   return db.prepare("SELECT * FROM tickets ORDER BY updated_at DESC, id DESC").all().map(boolRow);
 }
 
+function normalizeLimit(value, fallback = 10) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const limit = Number(value);
+  if (!Number.isInteger(limit) || limit <= 0) fail(`invalid limit: ${value}`);
+  return Math.min(limit, 50);
+}
+
+function parentTypesFor(type) {
+  const ticketType = normalizeType(type);
+  if (ticketType === "US") return [];
+  if (ticketType === "use_case") return ["US"];
+  if (ticketType === "task") return ["US", "use_case", "uat_feedback", "qc_feedback"];
+  if (ticketType === "uat_feedback" || ticketType === "qc_feedback") return ["US"];
+  return [];
+}
+
+function textTokens(value) {
+  return String(value || "")
+    .toLowerCase()
+    .split(/[^a-z0-9_]+/u)
+    .filter((token) => token.length >= 2);
+}
+
+function uniqueTokens(value) {
+  return [...new Set(textTokens(value))];
+}
+
+function fieldScore(value, tokens, exactQuery, weight) {
+  const text = String(value || "").toLowerCase();
+  if (!text) return { score: 0, matched: false };
+  let score = exactQuery && text.includes(exactQuery) ? weight * 4 : 0;
+  let matched = score > 0;
+  for (const token of tokens) {
+    if (text.includes(token)) {
+      score += weight;
+      matched = true;
+    }
+  }
+  return { score, matched };
+}
+
+function summarizeTicket(row) {
+  if (!row) return null;
+  return boolRow({
+    id: row.id,
+    parent_id: row.parent_id,
+    title: row.title,
+    type: row.type,
+    status: row.status,
+    user_reviewed: row.user_reviewed,
+    source_type: row.source_type,
+    source_id: row.source_id,
+    source_url: row.source_url,
+    updated_at: row.updated_at,
+  });
+}
+
+function smartSearch(db, args) {
+  const query = readValue(args.query || args._[1] || "").trim();
+  if (!query) fail("smart-search requires <query> or --query <text|@file>");
+  const limit = normalizeLimit(args.limit);
+  const exactQuery = query.toLowerCase();
+  const tokens = uniqueTokens(query);
+  const parentFor = args.parent_for ? normalizeType(args.parent_for) : null;
+  const allowedParentTypes = parentFor ? parentTypesFor(parentFor) : null;
+  if (parentFor && allowedParentTypes.length === 0) fail(`${parentFor} tickets cannot have a parent`);
+  if (args.status && !STATUSES.includes(args.status)) {
+    fail(`invalid status: ${args.status}. Expected one of: ${STATUSES.join(", ")}`);
+  }
+
+  const rows = listTickets(db);
+  const filtered = rows.filter((ticket) => {
+    if (args.type && ticket.type !== normalizeType(args.type)) return false;
+    if (args.status && ticket.status !== args.status) return false;
+    if (allowedParentTypes && !allowedParentTypes.includes(ticket.type)) return false;
+    return true;
+  });
+
+  const scored = filtered.map((ticket) => {
+    const fields = [
+      ["title", ticket.title, 8],
+      ["source_id", ticket.source_id, 7],
+      ["source_url", ticket.source_url, 4],
+      ["source_type", ticket.source_type, 3],
+      ["specification", ticket.specification, 3],
+      ["raw_requirement", ticket.raw_requirement, 3],
+      ["source_snapshot", ticket.source_snapshot, 3],
+      ["open_questions", ticket.open_questions, 3],
+      ["user_comments", ticket.user_comments, 2],
+      ["execution_plan", ticket.execution_plan, 2],
+      ["action_items", ticket.action_items, 1],
+      ["branch", ticket.branch, 1],
+    ];
+    let score = 0;
+    const matched_fields = [];
+    for (const [name, value, weight] of fields) {
+      const result = fieldScore(value, tokens, exactQuery, weight);
+      score += result.score;
+      if (result.matched) matched_fields.push(name);
+    }
+    if (String(ticket.id) === query) {
+      score += 100;
+      matched_fields.push("id");
+    }
+    return { ticket, score, matched_fields };
+  })
+    .filter((result) => result.score > 0)
+    .sort((a, b) => b.score - a.score || new Date(b.ticket.updated_at) - new Date(a.ticket.updated_at) || b.ticket.id - a.ticket.id)
+    .slice(0, limit);
+
+  return scored.map(({ ticket, score, matched_fields }) => {
+    const parent = ticket.parent_id
+      ? db.prepare("SELECT * FROM tickets WHERE id = ?").get(ticket.parent_id)
+      : null;
+    const children = db.prepare("SELECT id, parent_id, title, type, status, user_reviewed, source_type, source_id, source_url, updated_at FROM tickets WHERE parent_id = ? ORDER BY type, id")
+      .all(ticket.id);
+    return {
+      score,
+      matched_fields,
+      ticket: summarizeTicket(ticket),
+      parent: summarizeTicket(parent),
+      children: children.map(summarizeTicket),
+    };
+  });
+}
+
 function createTicket(db, args) {
   if (!args.title) fail("create requires --title");
   const stamp = now();
@@ -298,8 +449,8 @@ function createTicket(db, args) {
       parent_id, title, raw_requirement, specification, execution_plan, source_type,
       source_id, source_url, source_snapshot, branch, base_commit, type,
       head_commit, pr_url, pr_number, pr_status, pipeline_status, pipeline_url,
-      action_items, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      action_items, user_comments, open_questions, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     validateParent(db, normalizeParentId(args.parent_id), normalizeType(args.type)),
     args.title,
@@ -320,6 +471,8 @@ function createTicket(db, args) {
     args.pipeline_status || null,
     args.pipeline_url || null,
     readValue(args.action_items),
+    readValue(args.user_comments),
+    readValue(args.open_questions),
     stamp,
     stamp,
   );
@@ -333,8 +486,8 @@ function createTicket(db, args) {
 function updateTicket(db, id, args) {
   const ticket = requireTicket(db, id);
   const fields = {};
-  for (const key of ["title", "raw_requirement", "source_type", "source_id", "source_url", "source_snapshot", "branch", "base_commit", "head_commit", "pr_url", "pr_number", "pr_status", "pipeline_status", "pipeline_url", "action_items"]) {
-    if (args[key] !== undefined) fields[key] = key.endsWith("snapshot") || key === "raw_requirement" || key === "action_items" ? readValue(args[key]) : args[key];
+  for (const key of ["title", "raw_requirement", "source_type", "source_id", "source_url", "source_snapshot", "branch", "base_commit", "head_commit", "pr_url", "pr_number", "pr_status", "pipeline_status", "pipeline_url", "action_items", "user_comments", "open_questions"]) {
+    if (args[key] !== undefined) fields[key] = key.endsWith("snapshot") || ["raw_requirement", "action_items", "user_comments", "open_questions"].includes(key) ? readValue(args[key]) : args[key];
   }
   if (args.progress_percent !== undefined) fields.progress_percent = normalizeProgress(args.progress_percent);
   const nextType = args.type !== undefined ? normalizeType(args.type) : ticket.type;
@@ -370,6 +523,36 @@ function updateTicket(db, id, args) {
   if (metadataChanged.length) {
     recordEvent(db, Number(id), "ticket.updated", { fields: metadataChanged });
   }
+  return requireTicket(db, id);
+}
+
+function appendEntry(existing, actor, content) {
+  const entry = [`### ${actor} - ${now()}`, "", content.trim()].join("\n");
+  return [String(existing || "").trim(), entry].filter(Boolean).join("\n\n");
+}
+
+function commentTicket(db, id, args) {
+  const ticket = requireTicket(db, id);
+  const comment = readValue(args.comment || args.description || "").trim();
+  if (!comment) fail("comment requires --comment <text|@file>");
+  const actor = args.actor || "user";
+  const userComments = appendEntry(ticket.user_comments, actor, comment);
+  db.prepare("UPDATE tickets SET user_comments = ?, updated_at = ? WHERE id = ?").run(userComments, now(), Number(id));
+  recordEvent(db, Number(id), "ticket.user_commented", { comment }, actor);
+  return requireTicket(db, id);
+}
+
+function setOpenQuestions(db, id, args) {
+  const questions = readValue(args.questions || args.open_questions || "").trim();
+  if (!questions) fail("questions requires --questions <text|@file>");
+  const ticket = requireTicket(db, id);
+  db.prepare("UPDATE tickets SET status = 'hold', open_questions = ?, updated_at = ? WHERE id = ?").run(questions, now(), Number(id));
+  recordEvent(db, Number(id), "ticket.questions_opened", {
+    from: ticket.status,
+    to: "hold",
+    questions,
+    description: eventDescription(args),
+  });
   return requireTicket(db, id);
 }
 
@@ -668,8 +851,12 @@ function print(value, jsonOutput, quiet = false) {
     return;
   }
   if (Array.isArray(value)) {
-    for (const ticket of value) {
-      console.log(`#${ticket.id} [${ticket.type || "US"}:${ticket.status}] ${ticket.title} reviewed=${ticket.user_reviewed}`);
+    for (const item of value) {
+      const ticket = item.ticket || item;
+      const prefix = item.ticket ? `score=${item.score} ` : "";
+      const matched = item.matched_fields?.length ? ` matched=${item.matched_fields.join(",")}` : "";
+      const parent = item.parent ? ` parent=#${item.parent.id}` : "";
+      console.log(`${prefix}#${ticket.id} [${ticket.type || "US"}:${ticket.status}] ${ticket.title} reviewed=${ticket.user_reviewed}${parent}${matched}`);
     }
     return;
   }
@@ -732,6 +919,8 @@ async function handleApi(req, res, db, notify = () => {}) {
     if (action === "approve") result = approve(db, id, body.actor || "user", body);
     else if (action === "start") result = start(db, id, body);
     else if (action === "hold") result = transition(db, id, "hold", "ticket.status_changed", body);
+    else if (action === "comment") result = commentTicket(db, id, body);
+    else if (action === "questions") result = setOpenQuestions(db, id, body);
     else if (action === "review") result = transition(db, id, "in_review", "ticket.review_requested", body);
     else if (action === "close") result = transition(db, id, "closed", "ticket.closed", body);
     else if (action === "cancel") result = transition(db, id, "cancelled", "ticket.status_changed", body);
@@ -824,10 +1013,13 @@ function main() {
   if (command === "serve") return serve(args);
   const db = openDb();
   if (command === "list") return print(listTickets(db), args.json, args.quiet);
+  if (command === "smart-search") return print(smartSearch(db, args), args.json, args.quiet);
   if (command === "get") return print(requireTicket(db, id), args.json, args.quiet);
   if (command === "create") return print(createTicket(db, args), args.json, args.quiet);
   if (command === "update") return print(updateTicket(db, id, args), args.json, args.quiet);
   if (command === "approve") return print(approve(db, id, args.actor || "user", args), args.json, args.quiet);
+  if (command === "comment") return print(commentTicket(db, id, args), args.json, args.quiet);
+  if (command === "questions") return print(setOpenQuestions(db, id, args), args.json, args.quiet);
   if (command === "start") return print(start(db, id, args), args.json, args.quiet);
   if (command === "progress") return print(updateProgress(db, id, args), args.json, args.quiet);
   if (command === "progress-log") return print(progressLog(db, id, args), args.json, args.quiet ?? !args.json);

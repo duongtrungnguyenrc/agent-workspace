@@ -198,6 +198,7 @@ Use feedback group tickets when human-managed feedback is not naturally a user s
 - Keep approval-required implementation plans in `task` ticket `execution_plan` fields only after source exploration.
 - For external source tickets, fetch/explore the source with the relevant user-provided skill first, then store `source_type`, `source_id`, `source_url`, and `source_snapshot` on the Vibe Kanban work ticket. Do not mirror source tickets as separate Vibe Kanban tickets.
 - Use top-level `task`, `uat_feedback`, or `qc_feedback` tickets when source-ticket-driven work is not naturally part of a `US/use_case` hierarchy. Ask the user before linking a standalone task to an existing parent.
+- During analysis, stop and ask before writing tickets when multiple intents, actors, workflows, ticket hierarchies, acceptance meanings, or product/UX/data decisions would produce different documentation. Record only minor non-behavioral assumptions directly in the ticket.
 - Do not create local `documents/**`, `document.md`, product-doc `progress.md`, `.agents/processes/**/plan.md`, or `.agents/processes/**/progress.md` files as part of this skill.
 - Use Vibe Kanban task ticket progress, events, commits, branch, PR, pipeline, action items, and action events for implementation trace.
 - Use Vibe Kanban IDs and parent-child links as the durable navigation structure.

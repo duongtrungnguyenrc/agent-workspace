@@ -33,18 +33,29 @@ git checkout develop
 git pull --ff-only
 git rev-parse HEAD
 git checkout -b <prefix>/vk-<task-ticket-id>-<short-title>
-node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs update <task-ticket-id> --branch "<prefix>/vk-<task-ticket-id>-<short-title>" --base-commit <develop-head> --quiet
-node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs progress-log <task-ticket-id> --step "Checkout branch" --description "Created implementation branch from develop" --percent 5 --quiet
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs update <task-ticket-id> --branch "<prefix>/vk-<task-ticket-id>-<short-title>" --base-commit <develop-head> --quiet
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress-log <task-ticket-id> --step "Checkout branch" --description "Created implementation branch from develop" --percent 5 --quiet
 ```
 
 When the task has a source ticket, use the source-aware form instead:
 
 ```bash
 git checkout -b <prefix>/<source-ticket-id>-vk-<task-ticket-id>-<short-title>
-node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs update <task-ticket-id> --branch "<prefix>/<source-ticket-id>-vk-<task-ticket-id>-<short-title>" --base-commit <develop-head> --quiet
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs update <task-ticket-id> --branch "<prefix>/<source-ticket-id>-vk-<task-ticket-id>-<short-title>" --base-commit <develop-head> --quiet
 ```
 
 If the branch already exists, inspect it instead of recreating it. Confirm it is based on the expected base or ask the user if rebasing, recreating, or continuing from that branch would be safer.
+
+## Local Review Gate
+
+After coding, verification, and commit, give the user a chance to review locally before opening a PR when either condition applies:
+
+- The user asked to review locally before PR.
+- The task is UI-heavy, risky, broad, or would benefit from a manual local pass.
+
+At this gate, report the branch, commit hash, verification result, and local URL or command when relevant. Do not create the PR until the user confirms.
+
+If the user previously asked for fully automatic PR creation after task completion, continue to PR creation after the commit and verification unless a stop condition applies.
 
 ## Commit
 
@@ -61,22 +72,11 @@ git diff -- <relevant-paths>
 git add <relevant-paths>
 git commit -m "<type>: <summary>"
 git rev-parse HEAD
-node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs add-commit <task-ticket-id> --commit-hash <hash> --branch <branch> --message "<message>" --quiet
-node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs progress-log <task-ticket-id> --step "Commit implementation" --description "Recorded commit <hash>" --percent <percent> --quiet
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs add-commit <task-ticket-id> --commit-hash <hash> --branch <branch> --message "<message>" --quiet
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress-log <task-ticket-id> --step "Commit implementation" --description "Recorded commit <hash>" --percent <percent> --quiet
 ```
 
 If there are no changes after verification, do not create an empty commit unless the user explicitly asked for one.
-
-## Local Review Gate
-
-After coding, verification, and commit, give the user a chance to review locally before opening a PR when either condition applies:
-
-- The user asked to review locally before PR.
-- The task is UI-heavy, risky, broad, or would benefit from a manual local pass.
-
-At this gate, report the branch, commit hash, verification result, and local URL or command when relevant. Do not create the PR until the user confirms.
-
-If the user previously asked for fully automatic PR creation after task completion, continue to PR creation after the commit and verification unless a stop condition applies.
 
 ## Pull Request
 
@@ -106,12 +106,12 @@ PR body should include:
 After the PR is created, record the URL, PR status, and any pipeline/action URL you can identify, then move the task to review:
 
 ```bash
-node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs pr <task-ticket-id> --pr-url <url> --pr-status open --description "PR created" --quiet
-node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs pipeline <task-ticket-id> --pipeline-status pending --pipeline-url <url> --description "Pipeline started" --quiet
-node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs action-log <task-ticket-id> --action-type github-actions --status pending --url <url> --description "GitHub Actions started" --quiet
-node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs review <task-ticket-id> --description "Implementation complete and PR is ready for review" --quiet
-node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs progress <task-ticket-id> --percent 90 --note "PR created: <url>" --description "PR opened for review" --quiet
-node .codex/skills/vibe-kanban/scripts/vibe-kanban.mjs progress-log <task-ticket-id> --step "Open PR" --description "Created PR: <url>" --percent 90 --quiet
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs pr <task-ticket-id> --pr-url <url> --pr-status open --description "PR created" --quiet
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs pipeline <task-ticket-id> --pipeline-status pending --pipeline-url <url> --description "Pipeline started" --quiet
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs action-log <task-ticket-id> --action-type github-actions --status pending --url <url> --description "GitHub Actions started" --quiet
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs review <task-ticket-id> --description "Implementation complete and PR is ready for review" --quiet
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress <task-ticket-id> --percent 90 --note "PR created: <url>" --description "PR opened for review" --quiet
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress-log <task-ticket-id> --step "Open PR" --description "Created PR: <url>" --percent 90 --quiet
 ```
 
 If `gh` is not installed, not authenticated, or no GitHub remote exists, stop after commit and provide the exact branch, commit, and command the user can run next.

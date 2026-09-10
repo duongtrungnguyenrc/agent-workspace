@@ -1,13 +1,8 @@
----
-name: git-workflow
-description: Keep coding-agent changes on a proper Git work branch, preserve traceability, stop for local review when requested, and create pull requests with GitHub CLI.
----
-
 # Git Workflow
 
-Use this skill when a task involves preparing a work branch, committing implementation changes, opening a pull request, updating Vibe Kanban Git trace, or reviewing code before merge.
+Use this spec when a task involves preparing a work branch, committing implementation changes, opening a pull request, updating Vibe Kanban Git trace, or reviewing code before merge.
 
-This skill controls Git and GitHub workflow only. It does not replace the product-documentation or implementation-approval workflow. If the work is tied to a Vibe Kanban `task` ticket, use Vibe Kanban for ticket status, progress, branch, commit, source-ticket, PR, pipeline, and action trace.
+This spec controls Git and GitHub workflow only. It does not replace the product-documentation or implementation-approval workflow. If the work is tied to a Vibe Kanban `task` ticket, use Vibe Kanban for ticket status, progress, branch, commit, source-ticket, PR, pipeline, and action trace.
 
 ## Core Rules
 

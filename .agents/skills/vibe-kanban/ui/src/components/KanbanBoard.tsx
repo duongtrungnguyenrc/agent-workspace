@@ -76,6 +76,7 @@ function groupsFor(props: KanbanBoardProps): Group[] {
       ),
     }));
   }
+
   return props.statuses.map((status) => ({
     key: status,
     label: formatStatus(status),
@@ -169,7 +170,7 @@ function KanbanGroup({
 
   return (
     <article
-      className={`flex h-[calc(100vh-12rem)] min-h-105 max-h-180 w-76 shrink-0 flex-col rounded-2xl border bg-white/90 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_16px_40px_rgb(15_23_42/0.04)] transition ${isStatusBoard ? "border-dashed" : ""} ${isDragTarget ? "border-violet-500 bg-violet-50 ring-2 ring-violet-200" : "border-neutral-200/80"}`}
+      className={`flex h-[calc(100vh-12rem)] min-h-105 max-h-180 w-84 shrink-0 flex-col rounded-2xl border bg-white/90 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_16px_40px_rgb(15_23_42/0.04)] transition ${isStatusBoard ? "border-dashed" : ""} ${isDragTarget ? "border-violet-500 bg-violet-50 ring-2 ring-violet-200" : "border-neutral-200/80"}`}
       onDragOver={(event) => {
         if (!group.status) return;
         event.preventDefault();
@@ -207,17 +208,17 @@ function KanbanGroup({
 
       {isStatusBoard ? (
         <div
-          className={`my-3 mx-3 shrink-0 rounded-md border border-dashed px-3 py-2 text-center text-xs font-semibold transition ${isDragTarget ? "border-violet-300 bg-white text-violet-700" : "border-gray-200 bg-gray-50 text-gray-500"}`}
+          className={`mx-3 shrink-0 rounded-md border border-dashed px-3 py-2 text-center text-xs font-semibold transition ${isDragTarget ? "border-violet-300 bg-white text-violet-700" : "border-gray-200 bg-gray-50 text-gray-500"}`}
         >
           Drop to set {group.label}
         </div>
       ) : null}
 
       <div
-        className="min-h-0 flex-1 overflow-y-auto pr-1 px-3"
+        className="min-h-0 flex-1 overflow-y-auto px-3 mt-3"
         ref={scrollContainerRef}
       >
-        <div className="grid gap-3">
+        <div className="space-y-2 min-w-0 w-full">
           {visibleTickets.map((ticket) => (
             <TicketCard
               key={ticket.id}

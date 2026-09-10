@@ -67,7 +67,7 @@ When the question belongs to an existing ticket, record it with `node .agents/sk
 5. Return the created ticket IDs and hierarchy to the user. Group the response by `US -> use_case[]`; do not include `task[]` unless task tickets already existed before the story update.
 6. Do not implement code during this workflow.
 
-Task tickets are intentionally deferred. If the user asks to execute a `US` or `use_case`, switch to the implementation workflow: scan the current project, then create or update the smallest reviewable `task` tickets with execution plans for approval. Actual code changes, branch checkout, commits, local review before PR, and GitHub CLI PR creation belong to `task-implementer` plus `git-workflow`, not the story-building workflow.
+Task tickets are intentionally deferred. If the user asks to execute a `US` or `use_case`, switch to the implementation workflow: scan the current project, then create or update the smallest reviewable `task` tickets with execution plans for approval. Actual code changes, branch checkout, commits, local review before PR, and GitHub CLI PR creation belong to `task-implementer`, not the story-building workflow.
 
 If the user asks to update existing story docs, read the relevant Vibe Kanban ticket tree with `get <id> --json`, then update ticket fields through Vibe Kanban. Preserve existing parent-child links unless the user asks to reorganize the story. If an approved task execution plan changes, tell the user the task must be reviewed again before implementation.
 

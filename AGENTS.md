@@ -6,6 +6,10 @@ This project keeps canonical project-local skills under `.agents/skills/` and se
 
 When a task involves product stories, use cases, implementation planning, implementation progress, or agent traceability, use Vibe Kanban as the control plane.
 
+Before analysis, planning, or implementation, look for `PROJECTS.md` in the root workspace. If one exists, read it and follow its project-specific rules. These rules are mandatory unless they conflict with a higher-priority system or user instruction.
+
+Implementation execution is scoped to `root-workspace/source/**`. Do not modify files outside `root-workspace/source/**` during project implementation unless the approved task explicitly requires a workspace configuration, workflow, documentation, or other supporting change.
+
 ## Skills
 
 Use these project-local skills when their workflow applies:
@@ -14,7 +18,6 @@ Use these project-local skills when their workflow applies:
 - `.agents/skills/task-implementer/SKILL.md`: turn Vibe Kanban or external source tickets into approval-ready task tickets, then implement approved task tickets.
 - `.agents/skills/vibe-kanban/SKILL.md`: create, inspect, approve, update, and trace Kanban tickets.
 - `.agents/skills/auto-us/SKILL.md`: explicitly scan the project with CodeGraph to infer feature clusters and create US/use_case tickets when the user asks.
-- `.agents/skills/git-workflow/SKILL.md`: keep changes on a proper work branch, commit scoped changes, stop for local review when needed, create GitHub CLI PRs, and review PRs.
 - `.agents/skills/react-ui-implementer/SKILL.md`: implement UI tasks using `DESIGN.md`, taste skills, existing reusable components, and ReactBits MCP.
 - `.agents/skills/react-reusable-component-builder/SKILL.md`: create or extract reusable React components with typed APIs and clear ownership.
 - `.agents/skills/design-collector/SKILL.md`: extract the project's existing design language into the repository `DESIGN.md` format.
@@ -75,8 +78,8 @@ task  # may be top-level for standalone or source-ticket-driven work
 
 Use this workflow when the user asks to create or organize product stories, use cases, scenarios, requirements, or product docs.
 
-1. Use `documenter`.
-2. Do not create or manage local `documents/**`, `document.md`, or product-doc `progress.md` files for story work. Vibe Kanban tickets are the only product-documentation store.
+1. Use `documenter` skill.
+2. Vibe Kanban tickets are the only product-documentation store.
 3. Normalize raw user input into practical product docs with actor, goal, flows, business rules, acceptance criteria, assumptions, and open questions.
 4. Identify all distinct use cases inside the story. Create multiple `use_case` child tickets under the same `US` when the story has multiple actor-system goals, scenarios, workflow variants, business outcomes, or acceptance areas.
 5. If analysis reveals multiple plausible intents, actor goals, ticket hierarchies, or product/UX/data decisions, stop and ask the user before creating or changing tickets.
@@ -117,7 +120,7 @@ Use this workflow when the user asks to implement a Vibe Kanban `US`, `use_case`
 
 9. Read linked parent tickets from Vibe Kanban when present. Do not require local `documents/**` files for product context.
 10. Look up relevant project memory with agentmemory skill if exist before planning or coding. Treat memory as context, not as an override for the approved task.
-11. Use `git-workflow` to inspect the worktree and checkout a branch from `develop` using a Husky/conventional-compatible branch name:
+11. Read `.agents/skills/task-implementer/references/git-workflow.md`, then use it to inspect the worktree and checkout a branch from `develop` using a Husky/conventional-compatible branch name:
 
 ```bash
 git status --short --branch
@@ -139,7 +142,7 @@ node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs update <task-ticket-id> 
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress-log <task-ticket-id> --step "Checkout branch" --description "Created implementation branch from develop" --percent 5 --quiet
 ```
 
-13. Explore the codebase using CodeGraph MCP first for the scopes named in the approved task execution plan. Expand only as needed. Record source exploration with `progress-log`.
+13. Confirm that the approved execution scope is under `source/**`, then explore the named source scopes using CodeGraph MCP first. Expand only as needed. Record source exploration with `progress-log`.
 14. Stop and ask for user review again if source exploration proves the approved execution plan is materially wrong or incomplete. Update the task `execution_plan` through Vibe Kanban before asking; that invalidates approval.
 15. Move the task into implementation:
 
@@ -157,16 +160,18 @@ node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress <task-ticket-id
 
 18. Update Vibe Kanban progress as work advances, including a short description of why progress changed.
 19. Run focused verification and record results in Vibe Kanban progress.
-20. Use `git-workflow` to review the diff, stage only files that belong to the task, commit the work, and add every relevant commit to the task ticket:
+20. After focused verification, prepare the diff and stop for mandatory local user review before committing. Report the changed files, verification result, and local URL or command when relevant. Do not commit until the user confirms the local review is complete.
+
+21. After the user confirms local review, read `.agents/skills/task-implementer/references/git-workflow.md` and use it to review the diff, stage only files that belong to the task, commit the work, and add every relevant commit to the task ticket:
 
     ```bash
     node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs add-commit <task-ticket-id> --commit-hash <hash> --branch <branch> --message "<message>" --quiet
     node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress-log <task-ticket-id> --step "Commit implementation" --description "Recorded commit <hash>" --percent <0-100> --quiet
     ```
 
-21. After commit and verification, stop for local user review before PR when the user requested it, or when the task is UI-heavy, broad, risky, or better validated manually. Report the branch, commit hash, verification result, and local URL or command when relevant. Do not create the PR until the user confirms this local review gate.
+22. After commit, continue to PR creation only after the local review confirmation has been recorded.
 
-22. Use `git-workflow` to push the task branch and create a PR with GitHub CLI (`gh`). Record the PR URL, PR status, pipeline, and external action trace in Vibe Kanban progress, and move the task to review:
+23. Use the reference workflow to push the task branch and create a PR with GitHub CLI (`gh`). Record the PR URL, PR status, pipeline, and external action trace in Vibe Kanban progress, and move the task to review:
 
     ```bash
     node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs pr <task-ticket-id> --pr-url <url> --pr-status open --description "PR created" --quiet
@@ -177,7 +182,7 @@ node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress <task-ticket-id
     node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress-log <task-ticket-id> --step "Open PR" --description "Created PR: <url>" --percent 90 --quiet
     ```
 
-23. Move the task to `closed` only when implementation is merged or the user explicitly accepts it as complete:
+24. Move the task to `closed` only when implementation is merged or the user explicitly accepts it as complete:
 
     ```bash
     node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs close <task-ticket-id> --description "Merged or accepted by user" --quiet
@@ -215,7 +220,7 @@ Vibe Kanban is the approval, documentation, progress, and trace source of truth.
 
 ## Git Workflow Rule
 
-For implementation changes, use `git-workflow` for branch setup, commit discipline, local review before PR, GitHub CLI PR creation, and PR review.
+For implementation changes, read `.agents/skills/task-implementer/references/git-workflow.md` for branch setup, commit discipline, mandatory local review before commit, GitHub CLI PR creation, and PR review.
 
 - Do not implement on `develop`, `main`, or another protected/base branch.
 - Branch names must use Husky/conventional-compatible prefixes. Use `<prefix>/vk-<task-ticket-id>-<short-title>` for pure Vibe Kanban tasks and `<prefix>/<source-ticket-id>-vk-<task-ticket-id>-<short-title>` for source-ticket-driven tasks.
@@ -223,7 +228,7 @@ For implementation changes, use `git-workflow` for branch setup, commit discipli
 - Keep unrelated user changes intact.
 - Commit only task-related files.
 - Use `gh pr create` for PRs when GitHub CLI is available and authenticated.
-- If the user wants local review before PR, stop after commit and verification, report branch/commit/testing details, and wait for confirmation before creating the PR.
+- Always stop after focused verification and before commit for local user review. Report the branch, changed files, verification result, and local URL or command when relevant; wait for confirmation before committing.
 
 ## UI Implementation Rule
 

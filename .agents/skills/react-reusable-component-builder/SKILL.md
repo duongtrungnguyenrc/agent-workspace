@@ -7,8 +7,6 @@ description: Design, extract, or refactor reusable React components with clear o
 
 Use this skill when creating shared UI primitives, extracting repeated UI from routes/features, or refactoring components for reuse.
 
-When component work is part of an approved implementation task, use the project `git-workflow` skill for branch setup, scoped commits, local review before PR, GitHub CLI PR creation, and PR review. This skill only guides component design and refactoring decisions.
-
 ## Component Discovery
 
 - Search existing components first. Reuse, extend, or compose what already exists when the API and styling fit.

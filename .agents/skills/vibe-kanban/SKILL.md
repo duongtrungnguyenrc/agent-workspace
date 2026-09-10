@@ -102,7 +102,7 @@ The local server serves the built Vite UI and uses Socket.IO to push ticket chan
 
 Ticket detail pages include a user review comment form for pending task approval. User comments are stored in `user_comments` and activity history so the agent can revise the task or execution plan before asking for approval again.
 
-For implementation branch checkout, scoped commits, local review before PR, GitHub CLI PR creation, and PR review, use the project `git-workflow` skill. Vibe Kanban remains the source of truth for recording branch, commit hash, PR URL, progress, and activity trace.
+For implementation branch checkout, scoped commits, mandatory local review before commit, GitHub CLI PR creation, and PR review, use the [task-implementer Git workflow reference](../task-implementer/references/git-workflow.md). Vibe Kanban remains the source of truth for recording branch, commit hash, PR URL, progress, and activity trace.
 
 When an agent changes ticket status from CLI, pass `--description` to explain the reason for the transition. During implementation, use `progress-log` after each meaningful execution-plan step; it records ticket history and is quiet by default so it does not add unnecessary output to the agent turn.
 

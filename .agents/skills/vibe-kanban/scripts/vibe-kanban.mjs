@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { Server as SocketServer } from "socket.io";
 
-const STATUSES = ["open", "in_progress", "hold", "cancelled", "in_review", "closed"];
+const STATUSES = ["open", "in_progress", "in_review", "closed", "hold", "cancelled"];
 const TICKET_TYPES = ["US", "use_case", "task", "uat_feedback", "qc_feedback"];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

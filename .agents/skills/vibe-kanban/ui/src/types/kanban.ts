@@ -1,8 +1,26 @@
-export type TicketStatus = "open" | "in_progress" | "hold" | "cancelled" | "in_review" | "closed";
-export type TicketType = "US" | "use_case" | "task" | "uat_feedback" | "qc_feedback";
-export type TicketKind = "feature" | "bugfix" | "refactor" | "chore" | "docs" | "test";
+export type TicketStatus =
+  | "open"
+  | "in_progress"
+  | "hold"
+  | "cancelled"
+  | "in_review"
+  | "closed";
+export type TicketType = "group" | "feature" | "task";
+export type TicketKind =
+  | "feature"
+  | "bugfix"
+  | "refactor"
+  | "chore"
+  | "docs"
+  | "test";
 export type ReviewFilter = "" | "approved" | "pending";
-export type GroupBy = "status" | "type" | "kind" | "review" | "branch" | "parent";
+export type GroupBy =
+  | "status"
+  | "type"
+  | "kind"
+  | "review"
+  | "branch"
+  | "parent";
 
 export interface TicketListItem {
   id: number;
@@ -35,7 +53,10 @@ export interface TicketListItem {
   updated_at: string;
 }
 
-export type TicketSummary = Pick<TicketListItem, "id" | "parent_id" | "title" | "type" | "kind" | "status" | "user_reviewed">;
+export type TicketSummary = Pick<
+  TicketListItem,
+  "id" | "parent_id" | "title" | "type" | "kind" | "status" | "user_reviewed"
+>;
 
 export interface TicketRevision {
   id: number;

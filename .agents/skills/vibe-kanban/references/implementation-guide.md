@@ -42,14 +42,12 @@ Do not introduce Python, external databases, authentication, cloud services, SSE
 Every ticket has a `type`. Keep the type set small and useful for agent planning:
 
 ```text
-US
-use_case
+group
+feature
 task
-uat_feedback
-qc_feedback
 ```
 
-`US` is for user-story-shaped product requirements. `use_case` is for scenario or workflow coverage. `task` is for implementation or maintenance work. `uat_feedback` and `qc_feedback` are lightweight grouping tickets for human feedback streams that are not naturally user stories.
+`group` is the user-story level: a coherent product capability, or a UAT/QC feedback or maintenance theme that needs related tasks. `feature` is one use case: scenario or workflow coverage under a group. `task` is for implementation or maintenance work. Databases created before this type set are migrated on open (`US -> group`, `use_case -> feature`, top-level feedback groups `-> group`, nested ones `-> feature`).
 
 ### Task Kind
 
@@ -68,21 +66,21 @@ test
 
 ### Free-Form Task Intake
 
-A task requested without a ticket id or parent should be linked to the feature it belongs to. `smart-search --parent-for task` returns `kind_detection`, a `parent_suggestion` with `confidence` (`high`, `medium`, `low`) and up to three candidates, and ranked results. Ranking prefers `use_case` parents for tasks, adds a bonus when every query token appears in the title, and halves cancelled tickets. The agent presents the proposed kind and parent to the user for confirmation before creating the task; a top-level task is created only after the user accepts it.
+A task requested without a ticket id or parent should be linked to the feature it belongs to. `smart-search --parent-for task` returns `kind_detection`, a `parent_suggestion` with `confidence` (`high`, `medium`, `low`) and up to three candidates, and ranked results. Ranking prefers `feature` parents for tasks, adds a bonus when every query token appears in the title, and halves cancelled tickets. The agent presents the proposed kind and parent to the user for confirmation before creating the task; a top-level task is created only after the user accepts it.
 
 Use parent-child links for product-doc workflows:
 
 ```text
-US ticket
-  use_case ticket[]
+group ticket
+  feature ticket[]
     task ticket[]  # created/upserted when implementation is requested
 ```
 
-The `task` ticket is the approval and implementation unit. Store the execution plan that needs user approval on the `task` ticket. Parent `US` and `use_case` tickets provide product context and should link to their child tickets.
+The `task` ticket is the approval and implementation unit. Store the execution plan that needs user approval on the `task` ticket. Parent `group` and `feature` tickets provide product context and should link to their child tickets.
 
-Hierarchy is required only for product-doc tickets: `US` tickets are top-level and `use_case` tickets must have a `US` parent. `task` tickets may be top-level when standalone or source-ticket driven, or may be linked under `US`, `use_case`, `uat_feedback`, or `qc_feedback` when that helps review. Feedback grouping tickets may be top-level or linked under a `US`.
+Hierarchy is required only for product-doc tickets: `group` tickets are top-level and `feature` tickets must have a `group` parent. `task` tickets may be top-level when standalone or source-ticket driven, or may be linked under a `group` or `feature` when that helps review. Feedback or maintenance themes are ordinary `group` tickets (or `feature` tickets under an existing group) with tasks beneath them.
 
-Story-definition workflows should stop at `US -> use_case[]`. Do not generate task tickets or execution plans while turning an idea, feature map, or product note into product documentation. Codebases drift quickly, so task tickets should be created or updated only when the user asks to implement a `US` or `use_case`; at that time the agent must scan the current codebase and create the smallest reviewable tasks with fresh execution plans.
+Story-definition workflows should stop at `group -> feature[]`. Do not generate task tickets or execution plans while turning an idea, feature map, or product note into product documentation. Codebases drift quickly, so task tickets should be created or updated only when the user asks to implement a `group` or `feature`; at that time the agent must scan the current codebase and create the smallest reviewable tasks with fresh execution plans.
 
 ## Ticket Lifecycle
 
@@ -117,7 +115,7 @@ Allowed before task approval:
 - rewrite the raw requirement into an implementation specification
 - create or revise the execution plan
 - update ticket metadata and history
-- when the requested implementation target is a `US` or `use_case`, create or update child `task` tickets after source exploration and stop for review
+- when the requested implementation target is a `group` or `feature`, create or update child `task` tickets after source exploration and stop for review
 
 Not allowed before task approval:
 
@@ -273,7 +271,7 @@ ticket_commits
 ticket_events
 ```
 
-Store `parent_id` on `tickets` to link `US -> use_case[] -> task[]` when that hierarchy exists. Multiple tickets may share the same `parent_id`, so no uniqueness constraint should prevent a story from having many use cases or a use case or feedback group from having many tasks. Store revision rows when the specification or execution plan changes so approval state can be tied to the current plan.
+Store `parent_id` on `tickets` to link `group -> feature[] -> task[]` when that hierarchy exists. Multiple tickets may share the same `parent_id`, so no uniqueness constraint should prevent a group from having many features or a feature or group from having many tasks. Store revision rows when the specification or execution plan changes so approval state can be tied to the current plan.
 
 ## CLI and Agent Interface
 
@@ -286,10 +284,10 @@ vibe-kanban smart-search "<query>" --type task --kind bugfix --json
 vibe-kanban detect-kind "<text>" --json
 vibe-kanban get <ticket-id>
 vibe-kanban create
-vibe-kanban create --type use_case --parent-id <story-ticket-id>
-vibe-kanban create --type task --kind bugfix --parent-id <use-case-ticket-id>
+vibe-kanban create --type feature --parent-id <group-ticket-id>
+vibe-kanban create --type task --kind bugfix --parent-id <feature-ticket-id>
 vibe-kanban create --type task --source-type jira --source-id PROJ-123 --source-snapshot <text>
-vibe-kanban create --type uat_feedback --title <feedback-group>
+vibe-kanban create --type group --title <feedback-group>
 vibe-kanban update <ticket-id> --kind <kind>
 vibe-kanban delete <ticket-id> --description <text> --quiet
 vibe-kanban delete <ticket-id> --cascade --description <text> --quiet
@@ -341,8 +339,8 @@ The UI should provide:
 - confirmed ticket deletion from the detail page, with cascade when children exist
 - drag-and-drop between any status columns, with server-side target-status validation
 - ticket detail view
-- folder-tree hierarchy List tab for scanning `US -> use_case[] -> task[]` as nested tickets using the same filters as the Kanban board
-- horizontal draggable Graph tab for visualizing `US -> use_case[] -> task[]` hierarchy with visible type-specific styling, contained viewport zoom, and enough zoom-out range for large trees
+- folder-tree hierarchy List tab for scanning `group -> feature[] -> task[]` as nested tickets using the same filters as the Kanban board
+- horizontal draggable Graph tab for visualizing `group -> feature[] -> task[]` hierarchy with visible type-specific styling, contained viewport zoom, and enough zoom-out range for large trees
 - Markdown rendering
 - ticket status
 - review and approval state
@@ -359,8 +357,17 @@ Use Socket.IO for lightweight realtime refresh. The server keeps the id of the l
 
 ```js
 io.emit("tickets:changed", {
-  id, ticket_id, type, actor, payload, created_at,
-  ticket_exists, ticket_title, ticket_type, ticket_kind, ticket_status,
+  id,
+  ticket_id,
+  type,
+  actor,
+  payload,
+  created_at,
+  ticket_exists,
+  ticket_title,
+  ticket_type,
+  ticket_kind,
+  ticket_status,
   source: "api" | "sqlite",
 });
 ```
@@ -369,7 +376,7 @@ Because every mutation writes an event, the event tail is the only notification 
 
 The UI may approve task tickets and move tickets through the local API, but supported status validation and approval gating should remain in the server/CLI layer. In ticket detail views, expose status movement through a status select at the top of the page instead of rendering separate status-transition buttons.
 
-Ticket detail should render the editable form only after the user chooses Edit. `execution_plan` is an implementation artifact and should only be displayed or edited for `task` tickets; `US` and `use_case` detail views should focus on the product specification, source metadata, hierarchy, status, activity, and trace fields.
+Ticket detail should render the editable form only after the user chooses Edit. `execution_plan` is an implementation artifact and should only be displayed or edited for `task` tickets; `group` and `feature` detail views should focus on the product specification, source metadata, hierarchy, status, activity, and trace fields.
 
 Expose a global activity endpoint and page from server-managed ticket events. Agents should not need to call a separate command to record UI activity logs.
 

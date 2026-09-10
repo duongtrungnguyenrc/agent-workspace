@@ -19,16 +19,15 @@ export const statusTone: Record<TicketStatus, string> = {
 };
 
 export const typeTone: Record<TicketType, string> = {
-  US: "indigo",
-  use_case: "fuchsia",
+  group: "indigo",
+  feature: "fuchsia",
   task: "teal",
-  uat_feedback: "orange",
-  qc_feedback: "amber",
 };
 
 export function buttonTone(action: string): string {
   const tones: Record<string, string> = {
-    approve: "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700",
+    approve:
+      "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700",
     start: "border-violet-600 bg-violet-600 text-white hover:bg-violet-700",
     review: "border-orange-500 bg-orange-500 text-white hover:bg-orange-600",
     hold: "border-amber-600 bg-amber-600 text-white hover:bg-amber-700",
@@ -38,18 +37,23 @@ export function buttonTone(action: string): string {
   return tones[action] || secondaryButtonClass;
 }
 
-export const panelClass = "min-w-0 rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_16px_40px_rgb(15_23_42/0.04)]";
+export const panelClass =
+  "min-w-0 rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_16px_40px_rgb(15_23_42/0.04)]";
 export const buttonClass =
   "inline-flex min-h-9 items-center justify-center rounded-xl border px-3 py-2 text-sm font-semibold transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60";
-export const secondaryButtonClass = "border-neutral-300 bg-white text-neutral-700 hover:border-neutral-400 hover:bg-neutral-50 hover:shadow-sm";
-export const fieldClass = "grid min-w-0 gap-1.5 text-xs font-bold uppercase text-neutral-500";
+export const secondaryButtonClass =
+  "border-neutral-300 bg-white text-neutral-700 hover:border-neutral-400 hover:bg-neutral-50 hover:shadow-sm";
+export const fieldClass =
+  "grid min-w-0 gap-1.5 text-xs font-bold uppercase text-neutral-500";
 export const inputClass =
   "min-h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium normal-case text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-100";
 export const textareaClass =
   "w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium normal-case leading-6 text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-100";
 export const selectClass = inputClass;
-export const mutedTextClass = "m-0 text-sm leading-6 text-neutral-500 break-words";
-export const ticketCodeClass = "block font-mono text-xs font-bold uppercase tracking-normal text-violet-700";
+export const mutedTextClass =
+  "m-0 text-sm leading-6 text-neutral-500 break-words";
+export const ticketCodeClass =
+  "block font-mono text-xs font-bold uppercase tracking-normal text-violet-700";
 
 export function badgeToneClass(tone: string): string {
   const tones: Record<string, string> = {
@@ -78,7 +82,9 @@ export function fillToneClass(tone?: string): string {
     fuchsia: "bg-fuchsia-500",
     teal: "bg-teal-500",
   };
-  return tone ? tones[tone] || tones.violet : "bg-gradient-to-r from-violet-600 via-orange-500 to-emerald-500";
+  return tone
+    ? tones[tone] || tones.violet
+    : "bg-gradient-to-r from-violet-600 via-orange-500 to-emerald-500";
 }
 
 export function textToneClass(tone: string): string {

@@ -2,7 +2,9 @@
 
 Use these templates as Vibe Kanban ticket content. They are not local file templates.
 
-## `US` Ticket Specification
+## `group` Ticket Specification
+
+A `group` is the user-story level: a coherent product capability that owns one or more `feature` tickets.
 
 ```markdown
 # User Story
@@ -18,7 +20,7 @@ As a <actor>, I want <capability>, so that <outcome>.
 
 - <goal>
 
-## Use Cases
+## Features
 
 - <Verb Noun>: <one-line goal>
 - <Verb Noun>: <one-line goal>
@@ -45,7 +47,9 @@ As a <actor>, I want <capability>, so that <outcome>.
 - <assumption made because source material was incomplete>
 ```
 
-## `use_case` Ticket Specification
+## `feature` Ticket Specification
+
+A `feature` is one use case: a distinct actor-system goal under its `group`, written as `Verb Noun`.
 
 ```markdown
 # <Verb Noun>
@@ -115,8 +119,8 @@ Use task templates only when implementation has been requested and the current c
 
 ## Product Context
 
-- User Story: <story summary>
-- Use Case: <Verb Noun>
+- Group: <story summary>
+- Feature: <Verb Noun>
 - Scenario: <concrete path or implementation slice>
 
 ## Objective
@@ -162,12 +166,12 @@ Risks:
 - <risk or constraint>
 ```
 
-## `uat_feedback` / `qc_feedback` Ticket Specification
+## Feedback-Driven `group` Ticket Specification
 
-Use feedback group tickets when human-managed feedback is not naturally a user story but needs related implementation tasks.
+When human-managed UAT or QC feedback is not naturally a user story but needs related implementation tasks, model it as a top-level `group` ticket (or a `feature` under an existing group) and link the tasks beneath it.
 
 ```markdown
-# <UAT or QC Feedback Group>
+# <Feedback Group>
 
 ## Source Context
 
@@ -190,14 +194,14 @@ Use feedback group tickets when human-managed feedback is not naturally a user s
 
 ## Content Guidance
 
-- Keep product-facing docs in `US` and `use_case` ticket specifications.
-- List every distinct use case in the `US` ticket specification, then create a separate `use_case` child ticket for each item in that list.
-- A single `US` may have many `use_case` children; split them by distinct actor intent, workflow, business outcome, or acceptance area.
-- During story-building, stop at `US -> use_case[]`.
+- Keep product-facing docs in `group` and `feature` ticket specifications.
+- List every distinct feature in the `group` ticket specification, then create a separate `feature` child ticket for each item in that list.
+- A single `group` may have many `feature` children; split them by distinct actor intent, workflow, business outcome, or acceptance area.
+- During story-building, stop at `group -> feature[]`.
 - Keep task context in `task` ticket specifications only after implementation is requested.
 - Keep approval-required implementation plans in `task` ticket `execution_plan` fields only after source exploration.
 - For external source tickets, fetch/explore the source with the relevant user-provided skill first, then store `source_type`, `source_id`, `source_url`, and `source_snapshot` on the Vibe Kanban work ticket. Do not mirror source tickets as separate Vibe Kanban tickets.
-- Use top-level `task`, `uat_feedback`, or `qc_feedback` tickets when source-ticket-driven work is not naturally part of a `US/use_case` hierarchy. Ask the user before linking a standalone task to an existing parent.
+- Use top-level `task` tickets when source-ticket-driven work is not naturally part of a `group/feature` hierarchy. Ask the user before linking a standalone task to an existing parent.
 - During analysis, stop and ask before writing tickets when multiple intents, actors, workflows, ticket hierarchies, acceptance meanings, or product/UX/data decisions would produce different documentation. Record only minor non-behavioral assumptions directly in the ticket.
 - Do not create local `documents/**`, `document.md`, product-doc `progress.md`, `.agents/processes/**/plan.md`, or `.agents/processes/**/progress.md` files as part of this skill.
 - Use Vibe Kanban task ticket progress, events, commits, branch, PR, pipeline, action items, and action events for implementation trace.

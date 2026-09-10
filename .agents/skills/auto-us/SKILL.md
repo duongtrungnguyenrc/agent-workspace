@@ -1,6 +1,6 @@
 ---
 name: auto-us
-description: Explicitly scan a project with CodeGraph to infer feature clusters and create Vibe Kanban US/use_case tickets on request.
+description: Explicitly scan a project with CodeGraph to infer feature clusters and create Vibe Kanban group/feature tickets on request.
 ---
 
 # Auto US
@@ -28,7 +28,7 @@ Use native text search only for literal labels, menu text, route strings, or aft
 
 ## Analysis Checkpoints
 
-Stop and ask the user before creating or updating tickets when the scan reveals multiple reasonable product maps, ambiguous feature ownership, unclear actor intent, overlapping feature clusters, or a non-user-facing area that might be better represented as `task`, `uat_feedback`, or `qc_feedback`.
+Stop and ask the user before creating or updating tickets when the scan reveals multiple reasonable product maps, ambiguous feature ownership, unclear actor intent, overlapping feature clusters, or a non-user-facing area that might be better represented as `task`.
 
 Ask a concise question with the discovered options. If the uncertainty is only about labels or minor grouping and does not change the product map, proceed with a documented assumption in the ticket `specification`.
 
@@ -39,29 +39,29 @@ Create Vibe Kanban tickets only after the feature clusters are clear enough to s
 Default structure:
 
 ```text
-US
-  use_case[]
+group
+  feature[]
 ```
 
-- Create a `US` ticket for each coherent product capability or feature cluster.
-- Create multiple `use_case` children when the feature has distinct actor goals, scenarios, workflow variants, or acceptance areas.
+- Create a `group` ticket for each coherent product capability or feature cluster.
+- Create multiple `feature` children when the feature has distinct actor goals, scenarios, workflow variants, or acceptance areas.
 - Store codebase-derived evidence and assumptions in ticket `specification`.
 - Use source fields to mark that the source is inferred from the repository, for example `source_type=codegraph` and a `source_snapshot` summarizing the scanned routes/modules.
 - Do not create implementation `task` tickets unless the user also asks to implement. Auto-US is documentation discovery, not implementation planning.
-- After auto-US creates or updates the `US -> use_case[]` tree, stop for user review. When the user later asks to implement one of those tickets, switch to `task-implementer` so task planning uses a fresh source scan and the approval gate.
+- After auto-US creates or updates the `group -> feature[]` tree, stop for user review. When the user later asks to implement one of those tickets, switch to `task-implementer` so task planning uses a fresh source scan and the approval gate.
 
-If an inferred area is not user-story-shaped, ask before representing it as a top-level `task`, `uat_feedback`, or `qc_feedback` work ticket instead of forcing a `US/use_case` hierarchy.
+If an inferred area is not user-story-shaped, ask before representing it as a top-level `task` work ticket instead of forcing a `group/feature` hierarchy.
 
 ## Upsert Behavior
 
-Before creating tickets, list existing Vibe Kanban tickets and avoid duplicates. Prefer updating an existing inferred `US` or `use_case` when the title/source evidence clearly matches.
+Before creating tickets, list existing Vibe Kanban tickets and avoid duplicates. Prefer updating an existing inferred `group` or `feature` when the title/source evidence clearly matches.
 
 Use the project-local Vibe Kanban command:
 
 ```bash
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs list --json
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type US --title "<feature>" --specification "<markdown>" --source-type codegraph --source-snapshot "<evidence>"
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type use_case --parent-id <us-id> --title "<Verb Noun>" --specification "<markdown>" --source-type codegraph --source-snapshot "<evidence>"
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type group --title "<feature>" --specification "<markdown>" --source-type codegraph --source-snapshot "<evidence>"
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type feature --parent-id <group-id> --title "<Verb Noun>" --specification "<markdown>" --source-type codegraph --source-snapshot "<evidence>"
 ```
 
 Return the created or updated hierarchy with ticket IDs and the main code evidence used for each cluster.

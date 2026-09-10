@@ -17,7 +17,7 @@ Use these project-local skills when their workflow applies:
 - `.agents/skills/documenter/SKILL.md`: create and update product story and use-case documentation directly in Vibe Kanban.
 - `.agents/skills/task-implementer/SKILL.md`: turn Vibe Kanban or external source tickets into approval-ready task tickets, then implement approved task tickets.
 - `.agents/skills/vibe-kanban/SKILL.md`: create, inspect, approve, update, and trace Kanban tickets.
-- `.agents/skills/auto-us/SKILL.md`: explicitly scan the project with CodeGraph to infer feature clusters and create US/use_case tickets when the user asks.
+- `.agents/skills/auto-us/SKILL.md`: explicitly scan the project with CodeGraph to infer feature clusters and create group/feature tickets when the user asks.
 - `.agents/skills/react-ui-implementer/SKILL.md`: implement UI tasks using `DESIGN.md`, taste skills, existing reusable components, and ReactBits MCP.
 - `.agents/skills/react-reusable-component-builder/SKILL.md`: create or extract reusable React components with typed APIs and clear ownership.
 - `.agents/skills/design-collector/SKILL.md`: extract the project's existing design language into the repository `DESIGN.md` format.
@@ -53,26 +53,22 @@ Ask a concise question with the options or tradeoffs discovered. Do not silently
 Use this hierarchy for product work:
 
 ```text
-US
-  use_case[]
+group
+  feature[]
     task[]  # created/upserted only when implementation is requested
-
-uat_feedback | qc_feedback
-  task[]
 
 task  # may be top-level for standalone or source-ticket-driven work
 ```
 
-- `US` tickets represent user stories and are top-level.
-- `use_case` tickets must be linked to a parent `US` ticket.
-- A single `US` ticket may have many `use_case` children.
-- `task` tickets may be top-level for standalone or source-ticket-driven work, or linked under `US`, `use_case`, `uat_feedback`, or `qc_feedback` when that helps review.
-- A single `use_case` or feedback group ticket may have many `task` children.
+- `group` tickets represent user stories and are top-level.
+- `feature` tickets must be linked to a parent `group` ticket.
+- A single `group` ticket may have many `feature` children.
+- `task` tickets may be top-level for standalone or source-ticket-driven work, or linked under `group`, `feature` when that helps review.
+- A single `feature` or feedback group ticket may have many `task` children.
 - `task` tickets are the implementation, approval, progress, branch, commit, and PR trace unit.
-- `uat_feedback` and `qc_feedback` tickets group human feedback that is not naturally a user story.
-- Store implementation execution plans on `task` tickets, not only on parent `US` or `use_case` tickets.
-- During story-building, keep Vibe Kanban at `US -> use_case[]` only. Do not pre-create implementation `task` tickets from product ideas.
-- When the user asks to implement a `US`, `use_case`, feedback group, or external source ticket, scan the current codebase first, then create or update the smallest useful implementation `task` tickets with fresh execution plans.
+- Store implementation execution plans on `task` tickets, not only on parent `group` or `feature` tickets.
+- During story-building, keep Vibe Kanban at `group -> feature[]` only. Do not pre-create implementation `task` tickets from product ideas.
+- When the user asks to implement a `group`, `feature`, feedback group, or external source ticket, scan the current codebase first, then create or update the smallest useful implementation `task` tickets with fresh execution plans.
 
 ## Workflow 1: Build Story
 
@@ -81,24 +77,24 @@ Use this workflow when the user asks to create or organize product stories, use 
 1. Use `documenter` skill.
 2. Vibe Kanban tickets are the only product-documentation store.
 3. Normalize raw user input into practical product docs with actor, goal, flows, business rules, acceptance criteria, assumptions, and open questions.
-4. Identify all distinct use cases inside the story. Create multiple `use_case` child tickets under the same `US` when the story has multiple actor-system goals, scenarios, workflow variants, business outcomes, or acceptance areas.
+4. Identify all distinct use cases inside the story. Create multiple `feature` child tickets under the same `group` when the story has multiple actor-system goals, scenarios, workflow variants, business outcomes, or acceptance areas.
 5. If analysis reveals multiple plausible intents, actor goals, ticket hierarchies, or product/UX/data decisions, stop and ask the user before creating or changing tickets.
 6. Do not create implementation `task` tickets or execution plans during story-building. The codebase may change before implementation, so task tickets are generated later from the current source state.
 7. Create and store the linked Vibe Kanban ticket tree:
 
    ```bash
-   node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type US --title "<story>" --specification "<story markdown>"
-   node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type use_case --parent-id <us-ticket-id> --title "<use case>" --specification "<use case summary>"
+   node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type group --title "<story>" --specification "<story markdown>"
+   node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type feature --parent-id <us-ticket-id> --title "<use case>" --specification "<use case summary>"
    ```
 
 8. Return the created Vibe Kanban ticket IDs and hierarchy to the user.
 9. Do not implement code during this workflow.
 
-Use `auto-us` only when the user explicitly asks to infer or generate user stories from the existing project. It must scan routes/navigation/sidebar/product surfaces with CodeGraph first, then create or update Vibe Kanban `US/use_case` tickets from feature clusters.
+Use `auto-us` only when the user explicitly asks to infer or generate user stories from the existing project. It must scan routes/navigation/sidebar/product surfaces with CodeGraph first, then create or update Vibe Kanban `group/feature` tickets from feature clusters.
 
 ## Workflow 2: Implement
 
-Use this workflow when the user asks to implement a Vibe Kanban `US`, `use_case`, `uat_feedback`, `qc_feedback`, approved `task`, or one or more external source tickets.
+Use this workflow when the user asks to implement a Vibe Kanban `group`, `feature` approved `task`, or one or more external source tickets.
 
 1. Use `task-implementer`.
 2. Read the requested Vibe Kanban ticket:
@@ -108,7 +104,7 @@ Use this workflow when the user asks to implement a Vibe Kanban `US`, `use_case`
    ```
 
 3. If the request references external source tickets instead of Vibe Kanban ticket IDs, use the relevant source-specific skill or tool supplied by the user to fetch/explore them first. Store source details directly on the Vibe Kanban work ticket; do not mirror source tickets as separate Vibe Kanban tickets.
-4. If the ticket is `type = US`, `use_case`, `uat_feedback`, or `qc_feedback`, do not code yet. Read linked context, look up relevant project memory, scan the current codebase with CodeGraph first, then create or update implementation `task` tickets. Each generated task must include the current codebase-informed `specification`, `execution_plan`, and source fields when applicable; remain `open`; and have `user_reviewed = false`. Stop and return the generated task IDs for user review.
+4. If the ticket is `type = group`, `feature`, do not code yet. Read linked context, look up relevant project memory, scan the current codebase with CodeGraph first, then create or update implementation `task` tickets. Each generated task must include the current codebase-informed `specification`, `execution_plan`, and source fields when applicable; remain `open`; and have `user_reviewed = false`. Stop and return the generated task IDs for user review.
 5. During planning analysis, use `smart-search` with source IDs, feature names, labels, or task titles to find related tickets and likely parents before asking the user for ticket IDs.
 6. Stop and ask before creating or changing task tickets if materially different intents, implementation slices, parent links, UX behaviors, data contracts, integrations, or risk profiles are possible.
 7. If a standalone top-level task is appropriate and no parent is explicit, run `smart-search` first; ask the user before linking it to an existing parent when several plausible parents remain.

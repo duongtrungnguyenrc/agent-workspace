@@ -5,7 +5,7 @@ description: Turn Vibe Kanban or external source tickets into approval-ready tas
 
 # Task Implementer
 
-Use this skill when the user asks to implement a Vibe Kanban `US`, `use_case`, `task`, feedback group ticket, or one or more external source tickets. Vibe Kanban is the source of truth for agent work tickets, generated implementation tasks, approved execution plans, implementation progress, Git trace, PR state, pipeline state, and action history.
+Use this skill when the user asks to implement a Vibe Kanban `group`, `feature`, `task`, or one or more external source tickets. Vibe Kanban is the source of truth for agent work tickets, generated implementation tasks, approved execution plans, implementation progress, Git trace, PR state, pipeline state, and action history.
 
 Read [references/git-workflow.md](references/git-workflow.md) for branch checkout, commit discipline, mandatory local review before commit, GitHub CLI PR creation, and PR review. This skill decides what to implement; the reference defines how Git and GitHub state should be managed.
 
@@ -26,18 +26,18 @@ node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs get <task-ticket-id> --j
 Use the ticket tree as product context:
 
 ```text
-US ticket
-  use_case ticket
+group ticket
+  feature ticket
     task ticket[]  # generated/upserted when implementation is requested
 
-uat_feedback or qc_feedback ticket
+group ticket  # feedback-driven or maintenance grouping without features
   task ticket[]
 
 task ticket  # may be top-level for standalone or source-ticket-driven work
 ```
 
-- `US` ticket `specification`: high-level user story and product goals.
-- `use_case` ticket `specification`: actor-system behavior, flows, rules, and acceptance criteria.
+- `group` ticket `specification`: high-level user story, product goals, or the theme of a feedback/maintenance group.
+- `feature` ticket `specification`: one use case: actor-system behavior, flows, rules, and acceptance criteria.
 - `task` ticket `specification`: implementation task context created after current codebase exploration.
 - `task` ticket `execution_plan`: implementation plan that must be approved before coding.
 - `task` ticket status/progress/events/commits/PR/pipeline/action fields: implementation trace.
@@ -49,15 +49,15 @@ Source tickets and work tickets are different. A Jira, external Kanban, Linear, 
 
 1. If the request references external source tickets instead of Vibe Kanban ticket IDs, fetch/explore those source tickets first with the relevant source skill or tool supplied by the user.
 2. Read any requested Vibe Kanban ticket with `get <ticket-id> --json`.
-3. If the ticket is `type = US`, read its `use_case` children. If the ticket is `type = use_case`, `uat_feedback`, or `qc_feedback`, read its parent `US` if present. Use the available specs/source snapshots as product context.
-4. For source-ticket, `US`, `use_case`, `uat_feedback`, or `qc_feedback` implementation requests, do not modify code yet. Look up relevant project memory, then scan the current codebase with CodeGraph first for the product area. If the repository has no `.codegraph/` index, follow the project CodeGraph fallback rule and use targeted source inspection, but record that limitation in the task `specification`. Create or update the smallest independently reviewable `task` tickets, each with grounded `specification`, `execution_plan`, and source fields when applicable.
+3. If the ticket is `type = group`, read its `feature` children. If the ticket is `type = feature`, read its parent `group` if present. Use the available specs/source snapshots as product context.
+4. For source-ticket, `group`, `feature` implementation requests, do not modify code yet. Look up relevant project memory, then scan the current codebase with CodeGraph first for the product area. If the repository has no `.codegraph/` index, follow the project CodeGraph fallback rule and use targeted source inspection, but record that limitation in the task `specification`. Create or update the smallest independently reviewable `task` tickets, each with grounded `specification`, `execution_plan`, and source fields when applicable.
 5. During this analysis, use Vibe Kanban `smart-search` to find related tickets and likely parents before deciding that parent context is missing. For example, search source ids, feature names, user-facing labels, and task titles with `node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs smart-search "<query>" --parent-for task --json`. Read `kind_detection` and `parent_suggestion` from the output: they give the proposed task kind (`feature`, `bugfix`, `refactor`, `chore`, `docs`, `test`) and the best parent with a `confidence` and candidate ids.
 6. Stop and ask before creating or changing task tickets if multiple plausible intents, implementation slices, ticket parents, UX behaviors, data contracts, integrations, or risk profiles would lead to different execution plans. Ask a concise question with the options discovered. For minor local assumptions that do not change scope or behavior, proceed and record the assumption in the task `specification`.
-7. Upsert task tickets by matching existing child task titles/source identifiers when present; otherwise create new child `task` tickets with `--kind <kind>` and `--parent-id <id>`. For a free-form task request with no explicit parent, follow the Vibe Kanban "Task Kind And Parent Linking" rule: propose the detected kind and the suggested `use_case`/`US`/feedback parent to the user in one concise confirmation (a `high` confidence suggestion is the default answer; `medium`/`low` lists the candidates plus a top-level option), and create a top-level task only after the user accepts it. New or changed task plans must remain `open`, `user_reviewed = false`, and should be returned to the user for approval. Stop after task upsert.
+7. Upsert task tickets by matching existing child task titles/source identifiers when present; otherwise create new child `task` tickets with `--kind <kind>` and `--parent-id <id>`. For a free-form task request with no explicit parent, follow the Vibe Kanban "Task Kind And Parent Linking" rule: propose the detected kind and the suggested `feature` or `group` parent to the user in one concise confirmation (a `high` confidence suggestion is the default answer; `medium`/`low` lists the candidates plus a top-level option), and create a top-level task only after the user accepts it. New or changed task plans must remain `open`, `user_reviewed = false`, and should be returned to the user for approval. Stop after task upsert.
 8. If the requested ticket is `type = task`, stop immediately if `user_reviewed` is false or `execution_plan` is empty. Ask the user to review and approve the task ticket before implementation.
-9. Read the linked parent ticket and grandparent `US` ticket from Vibe Kanban when present.
+9. Read the linked parent ticket and grandparent `group` ticket from Vibe Kanban when present.
 10. Look up relevant project memory with agentmemory before planning or coding. Use memory as context, not as an override for the approved ticket.
-11. Identify the source ticket context, user story, use case or feedback group, task objective, acceptance criteria, constraints, open questions, assumptions, and approved execution plan from Vibe Kanban ticket content.
+11. Identify the source ticket context, group, feature, task objective, acceptance criteria, constraints, open questions, assumptions, and approved execution plan from Vibe Kanban ticket content.
 12. If any unresolved product, UX, data, integration, risk, or scope question affects implementation, write the questions to the task with `node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs questions <task-ticket-id> --questions "<markdown questions>" --description "Blocked pending user clarification" --quiet`, leaving the ticket on `hold`. If a Teams, Slack, email, or other human-question skill/tool is available, trigger it after recording the questions; otherwise ask in the current chat. Do not code while such a question is unresolved.
 13. Read [references/git-workflow.md](references/git-workflow.md), then use it before code changes to inspect the worktree and checkout a working branch from `develop` using a Husky/conventional-compatible branch name:
 
@@ -155,7 +155,7 @@ node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress <task-ticket-id
 Pause and ask the user for confirmation whenever:
 
 - The Vibe Kanban ticket is missing, is not a `task`, is not approved, or lacks an execution plan.
-- The requested work is a source ticket, `US`, `use_case`, `uat_feedback`, or `qc_feedback` and generated/upserted tasks have not been reviewed yet.
+- The requested work is a source ticket, `group`, `feature` and generated/upserted tasks have not been reviewed yet.
 - Planning analysis reveals materially different possible intents, task slices, parent links, product behaviors, data contracts, integrations, or risk profiles.
 - The linked parent context is still missing after `smart-search` and the implementation cannot be safely scoped from the task alone.
 - The approved Vibe Kanban content has open questions that affect behavior, data shape, permissions, UX, integrations, or acceptance criteria; record them with `questions` and keep the ticket on `hold` until answered.

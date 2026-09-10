@@ -1,14 +1,20 @@
-import type { TicketKind, TicketListItem, TicketStatus, TicketType } from "../types/kanban";
+import type {
+  TicketKind,
+  TicketListItem,
+  TicketStatus,
+  TicketType,
+} from "../types/kanban";
 
 export function formatType(type: TicketType | string): string {
-  if (type === "US") return "US";
-  if (type === "use_case") return "Use Case";
-  if (type === "uat_feedback") return "UAT Feedback";
-  if (type === "qc_feedback") return "QC Feedback";
-  return String(type || "US").replaceAll("_", " ");
+  if (type === "group") return "Group";
+  if (type === "feature") return "Feature";
+  if (type === "task") return "Task";
+  return String(type || "group").replaceAll("_", " ");
 }
 
-export function formatKind(kind: TicketKind | string | null | undefined): string {
+export function formatKind(
+  kind: TicketKind | string | null | undefined,
+): string {
   if (kind === "bugfix") return "Bug fix";
   if (kind === "feature") return "Feature";
   if (kind === "refactor") return "Refactor";

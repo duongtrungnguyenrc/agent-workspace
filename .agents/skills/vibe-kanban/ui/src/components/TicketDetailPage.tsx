@@ -59,20 +59,14 @@ function eligibleParents(
   tickets: TicketListItem[],
   excludeId: number,
 ) {
-  if (type === "use_case")
+  if (type === "feature")
     return tickets.filter(
-      (ticket) => ticket.type === "US" && ticket.id !== excludeId,
+      (ticket) => ticket.type === "group" && ticket.id !== excludeId,
     );
   if (type === "task")
     return tickets.filter(
       (ticket) =>
-        ["US", "use_case", "uat_feedback", "qc_feedback"].includes(
-          ticket.type,
-        ) && ticket.id !== excludeId,
-    );
-  if (type === "uat_feedback" || type === "qc_feedback")
-    return tickets.filter(
-      (ticket) => ticket.type === "US" && ticket.id !== excludeId,
+        ["group", "feature"].includes(ticket.type) && ticket.id !== excludeId,
     );
   return [];
 }

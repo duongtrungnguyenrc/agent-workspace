@@ -32,7 +32,7 @@ const REFRESH_DEBOUNCE_MS = 150;
 
 const defaultCollection: TicketCollection = {
   statuses: ["open", "in_progress", "in_review", "closed", "hold", "cancelled"],
-  types: ["US", "use_case", "task", "uat_feedback", "qc_feedback"],
+  types: ["group", "feature", "task"],
   kinds: ["feature", "bugfix", "refactor", "chore", "docs", "test"],
   tickets: [],
 };
@@ -55,7 +55,7 @@ function mergeEvents(incoming: ActivityEvent[], current: ActivityEvent[]) {
 function toastFromChange(event: TicketChangeEvent): Toast {
   const code = ticketCode({
     id: event.ticket_id,
-    type: event.ticket_type || "US",
+    type: event.ticket_type || "group",
   });
   const meta = [
     event.ticket_type ? formatType(event.ticket_type) : "",

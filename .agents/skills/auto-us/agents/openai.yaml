@@ -1,5 +1,5 @@
 interface:
   display_name: "Auto US"
-  short_description: "Bootstrap US/use case tickets from an indexed codebase"
+  short_description: "Bootstrap group/feature tickets from an indexed codebase"
 policy:
   allow_implicit_invocation: false

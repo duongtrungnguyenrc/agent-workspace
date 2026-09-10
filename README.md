@@ -10,7 +10,7 @@ This workspace integrates the following core components:
 - Vibe Kanban for managing tickets, stories, use cases, tasks, and progress
 - CodeGraph for understanding project structure and dependencies
 - AgentMemory for storing project context and memory
-- Auto-US project scanning for bootstrapping a new codebase into story/use-case tickets
+- Auto-US project scanning for bootstrapping a new codebase into group/feature tickets
 - Analysis checkpoints that make the agent stop and ask when intent, scope, or risk needs a human decision
 - Setup script to standardize the environment for a new project
 
@@ -90,17 +90,17 @@ flowchart TD
     AU1 --> AU2[Scan routes, screens, APIs, jobs, navigation]
     AU2 --> AUQ{Feature map ambiguous?}
     AUQ -->|Yes| F[Stop for user review]
-    AUQ -->|No| AU3[Create or update US and use_case tickets]
+    AUQ -->|No| AU3[Create or update group and feature tickets]
     AU3 --> F
 
     B -->|Build product feature docs| C[documenter]
-    C --> D[Create or update US]
+    C --> D[Create or update group]
     D --> DQ{Material ambiguity?}
     DQ -->|Yes| F
-    DQ -->|No| E[Create use_case children]
+    DQ -->|No| E[Create feature children]
     E --> F
 
-    B -->|Implement task from US, UC, Feature, or any task | G[task-implementer]
+    B -->|Implement task from group, feature, or any task | G[task-implementer]
     G --> H{External source ticket?}
     H -->|Yes| I[Fetch source ticket]
     H -->|No| J[Read Vibe Kanban ticket]
@@ -141,8 +141,8 @@ flowchart TD
 2. Run `./scripts/setup.sh` from the workspace root.
 3. Create the project under `source/` or in a separate workspace.
 4. Before analysis or implementation, look for and follow `PROJECTS.md` when it exists in the repository or applicable project directory.
-5. If the project already has code, explicitly run the `auto-us` workflow to scan routes, screens, APIs, jobs, navigation, and permission surfaces with CodeGraph, then create or update Vibe Kanban `US -> use_case[]` tickets from the discovered feature clusters.
-6. If the project starts from product notes instead of existing code, use `documenter` to create the initial `US -> use_case[]` tree directly from those requirements.
+5. If the project already has code, explicitly run the `auto-us` workflow to scan routes, screens, APIs, jobs, navigation, and permission surfaces with CodeGraph, then create or update Vibe Kanban `group -> feature[]` tickets from the discovered feature clusters.
+6. If the project starts from product notes instead of existing code, use `documenter` to create the initial `group -> feature[]` tree directly from those requirements.
 7. For UI-heavy projects, use `design-collector` to extract or refresh `DESIGN.md` before implementation tasks are planned.
 8. Preserve relevant context with AgentMemory and keep Vibe Kanban as the source of truth.
 9. Stop and ask for user direction when analysis exposes competing intents, unclear scope, ambiguous hierarchy, or materially different implementation risks.
@@ -214,16 +214,16 @@ User comments let reviewers give feedback before approving a task. Open question
 
 Use the skills as one workflow, not as interchangeable shortcuts:
 
-| Situation                                                                                                         | Skill                                             | Output                                                                       |
-| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------- |
-| New project has existing code and the user asks to bootstrap/infer stories                                        | `auto-us`                                         | CodeGraph-derived `US -> use_case[]` tickets                                 |
-| User gives product notes, requirements, scenarios, or acceptance criteria                                         | `documenter`                                      | Human-authored `US -> use_case[]`, feedback groups, or documentation updates |
-| User asks to implement a `US`, `use_case`, feedback group, source ticket, or approved task                        | `task-implementer`                                | Approval-ready `task` tickets or approved-code implementation                |
-| Work needs ticket storage, approval state, progress, branch, commits, PRs, pipelines, comments, or open questions | `vibe-kanban`                                     | Durable workflow trace in SQLite                                             |
-| Implementation needs branch, commit, PR, or review discipline                                                     | `task-implementer` + `references/git-workflow.md` | Scoped branch, mandatory local review before commit, and PR trace            |
-| UI implementation changes screens/components                                                                      | `react-ui-implementer`                            | UI work aligned to `DESIGN.md` and existing component patterns               |
-| UI work creates or extracts reusable React components                                                             | `react-reusable-component-builder`                | Typed reusable components with clear ownership                               |
-| A project needs its existing visual system captured                                                               | `design-collector`                                | `DESIGN.md` design contract                                                  |
+| Situation                                                                                                         | Skill                                             | Output                                                                         |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| New project has existing code and the user asks to bootstrap/infer stories                                        | `auto-us`                                         | CodeGraph-derived `group -> feature[]` tickets                                 |
+| User gives product notes, requirements, scenarios, or acceptance criteria                                         | `documenter`                                      | Human-authored `group -> feature[]`, feedback groups, or documentation updates |
+| User asks to implement a `group`, `feature`, source ticket, or approved task                                      | `task-implementer`                                | Approval-ready `task` tickets or approved-code implementation                  |
+| Work needs ticket storage, approval state, progress, branch, commits, PRs, pipelines, comments, or open questions | `vibe-kanban`                                     | Durable workflow trace in SQLite                                               |
+| Implementation needs branch, commit, PR, or review discipline                                                     | `task-implementer` + `references/git-workflow.md` | Scoped branch, mandatory local review before commit, and PR trace              |
+| UI implementation changes screens/components                                                                      | `react-ui-implementer`                            | UI work aligned to `DESIGN.md` and existing component patterns                 |
+| UI work creates or extracts reusable React components                                                             | `react-reusable-component-builder`                | Typed reusable components with clear ownership                                 |
+| A project needs its existing visual system captured                                                               | `design-collector`                                | `DESIGN.md` design contract                                                    |
 
 The handoff order for a new project with code is: setup, optional `design-collector` for UI projects, explicit `auto-us`, user review, `task-implementer` task planning, user approval, implementation, mandatory local review, commit, PR/review.
 

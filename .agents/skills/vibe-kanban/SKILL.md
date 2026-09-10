@@ -16,12 +16,12 @@ Use this skill when creating, updating, or using the internal `vibe-kanban` work
 Tickets are linked as a hierarchy when used with product documentation:
 
 ```text
-US
-  use_case[]
+group
+  feature[]
     task[]  # generated only when implementation is requested
 ```
 
-The `task` ticket is the implementation and approval unit. Store the execution plan that requires user approval on the `task` ticket, not only on the parent story or use case.
+The `task` ticket is the implementation and approval unit. Store the execution plan that requires user approval on the `task` ticket, not only on the parent group or feature.
 
 Distinguish source tickets from Vibe Kanban work tickets:
 
@@ -32,15 +32,15 @@ Distinguish source tickets from Vibe Kanban work tickets:
 
 For product stories, keep story-building separate from implementation planning:
 
-- Story-definition work creates or updates `US` and `use_case` tickets only.
+- Story-definition work creates or updates `group` and `feature` tickets only.
 - User-provided product notes belong to `documenter`; explicit codebase-derived bootstrap belongs to `auto-us`; implementation planning and coding belong to `task-implementer`.
 - Do not pre-create `task` tickets from an idea document while the codebase is still evolving.
-- When the user asks to implement a `US` or `use_case`, scan the current codebase first with CodeGraph or the available source tools, then create or update the smallest reviewable `task` tickets under the relevant `use_case` tickets.
+- When the user asks to implement a `group` or `feature`, scan the current codebase first with CodeGraph or the available source tools, then create or update the smallest reviewable `task` tickets under the relevant `feature` tickets.
 - Generated implementation tasks start `open`, `user_reviewed = false`, and require explicit user approval before code changes.
 
-A single `US` may have many `use_case` children. Split use cases by distinct actor-system goals, scenarios, workflow variants, business outcomes, or acceptance areas instead of forcing one broad use case per story.
+Ticket types are `group`, `feature`, and `task`. A `group` is the user-story level (a coherent product capability, or a feedback/maintenance theme); a `feature` is one use case under a group; a `task` is the implementation unit. A single `group` may have many `feature` children. Split features by distinct actor-system goals, scenarios, workflow variants, business outcomes, or acceptance areas instead of forcing one broad feature per group.
 
-Not every work ticket needs the full `US -> use_case -> task` hierarchy. A `task` may be top-level when the work is standalone or source-ticket driven. If a plausible parent exists, ask the user before linking or reorganizing it. For non-US human feedback streams, use `uat_feedback` or `qc_feedback` as optional grouping tickets at the same planning level as use cases, then place implementation tasks under them when useful.
+Not every work ticket needs the full `group -> feature -> task` hierarchy. A `task` may be top-level when the work is standalone or source-ticket driven. If a plausible parent exists, ask the user before linking or reorganizing it. For UAT/QC feedback streams that are not naturally a user story, use a top-level `group` (or a `feature` under an existing group) as the grouping ticket and place implementation tasks under it.
 
 ## Task Kind And Parent Linking
 
@@ -49,7 +49,7 @@ Every `task` carries a `kind`: `feature`, `bugfix`, `refactor`, `chore`, `docs`,
 When the user asks for a free-form task (no ticket id and no explicit parent), do not create a top-level task by default. Find the feature it belongs to first:
 
 1. Run `smart-search "<title or key phrases>" --parent-for task --json`. The result includes `kind_detection`, `parent_suggestion` (with `confidence`, `reason`, and up to three `candidates`), and ranked `results` with parent and child summaries. Search source ids, feature names, user-facing labels, and screen names, not only the literal task title.
-2. Prefer a matching `use_case` over its `US`; the ranking already favors use cases for tasks. Use `uat_feedback` or `qc_feedback` when the request is clearly feedback-driven.
+2. Prefer a matching `feature` over its `group`; the ranking already favors features for tasks. Use the feedback `group` when the request is clearly feedback-driven.
 3. Confirm with the user before creating. Ask one concise question that names the proposed kind and parent, for example: "Create task `Fix greeting for first enabled To recipient` as `bugfix` under VK-5 `Preview Email Recipients`?" When `parent_suggestion.confidence` is `high`, propose that link as the default answer; when it is `medium` or `low`, or there is no suggestion, list the candidate ticket ids and offer a top-level task as one option. Skip the question only when the user already named the parent or explicitly asked for a standalone task.
 4. Create with `--kind <kind> --parent-id <id>`. Omit `--parent-id` only after the user accepts a standalone task, and note detected or assumed values in the ticket `specification` when they matter.
 
@@ -83,9 +83,9 @@ node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs smart-search "<query>" -
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs smart-search "<query>" --type task --kind bugfix --status open --json
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs detect-kind "<task title or request>" --json
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs seed
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type US --title "<story>"
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type use_case --parent-id <story-ticket-id> --title "<use case>"
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type task --kind <feature|bugfix|refactor|chore|docs|test> --parent-id <use-case-or-feedback-id> --title "<task>"
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type group --title "<group>"
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type feature --parent-id <group-ticket-id> --title "<feature>"
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type task --kind <feature|bugfix|refactor|chore|docs|test> --parent-id <feature-or-group-id> --title "<task>"
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type task --title "<task>" # top-level only after the user accepts a standalone task; kind is auto-detected when --kind is omitted
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs update <ticket-id> --kind bugfix --parent-id <id> --quiet
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs delete <ticket-id> --description "<why>" --quiet # add --cascade to delete a subtree
@@ -108,7 +108,7 @@ Use `smart-search` before asking the user to identify related tickets or parents
 
 The Node script uses SQLite via `node:sqlite` and stores its database at `.vibe-kanban/vibe-kanban.sqlite` by default. Override that with `VIBE_KANBAN_DB` when needed.
 
-The UI is a React 19 + Vite + Tailwind CSS app under `ui/` and builds to `assets/dist/`. It includes default Kanban, folder-tree List, and draggable Graph tabs sharing the same board filters (type, kind, status, review, and grouping), plus activity logs and ticket detail pages. The Graph tab visualizes `US -> use_case[] -> task[]` ticket hierarchy with a horizontal SVG mindmap whose pan and zoom stay inside the graph viewport. Ticket detail pages should be read-focused by default: hide the edit form until the user chooses Edit, change status from a status select near the top of the page, show or edit implementation execution plans only for `task` tickets, and expose a confirmed Delete action. The activity page loads 50 events per page and fetches older pages with infinite scroll through `GET /api/activity?limit=<n>&before=<event-id>`. Keep UI styling in Tailwind utility classes and do not add handwritten CSS beyond the Tailwind entry import:
+The UI is a React 19 + Vite + Tailwind CSS app under `ui/` and builds to `assets/dist/`. It includes default Kanban, folder-tree List, and draggable Graph tabs sharing the same board filters (type, kind, status, review, and grouping), plus activity logs and ticket detail pages. The Graph tab visualizes `group -> feature[] -> task[]` ticket hierarchy with a horizontal SVG mindmap whose pan and zoom stay inside the graph viewport. Ticket detail pages should be read-focused by default: hide the edit form until the user chooses Edit, change status from a status select near the top of the page, show or edit implementation execution plans only for `task` tickets, and expose a confirmed Delete action. The activity page loads 50 events per page and fetches older pages with infinite scroll through `GET /api/activity?limit=<n>&before=<event-id>`. Keep UI styling in Tailwind utility classes and do not add handwritten CSS beyond the Tailwind entry import:
 
 ```bash
 pnpm install --frozen-lockfile

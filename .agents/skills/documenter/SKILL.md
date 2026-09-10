@@ -1,6 +1,6 @@
 ---
 name: documenter
-description: Create and update product stories, use cases, feedback groups, and work-ticket documentation directly in Vibe Kanban.
+description: Create and update product group (user story) and feature (use case) tickets and work-ticket documentation directly in Vibe Kanban.
 ---
 
 # Documenter
@@ -22,23 +22,23 @@ node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs <command>
 Model product documentation as linked tickets:
 
 ```text
-US
-  use_case[]
+group
+  feature[]
     task[]  # created/upserted later when implementation is requested
 ```
 
-- Create one `US` ticket for the high-level user story.
-- Create multiple `use_case` tickets under the same `US` ticket when the story contains multiple actor-system goals, scenarios, workflow variants, business capabilities, or acceptance areas.
-- Create one `use_case` ticket under the `US` ticket for each distinct actor-system goal. Do not collapse unrelated goals into a single broad use case just because they belong to the same story.
+- Create one `group` ticket for the high-level user story.
+- Create multiple `feature` tickets under the same `group` ticket when the story contains multiple actor-system goals, scenarios, workflow variants, business capabilities, or acceptance areas.
+- Create one `feature` ticket under the `group` ticket for each distinct actor-system goal. Do not collapse unrelated goals into a single broad feature just because they belong to the same group.
 - Store product documentation Markdown in ticket `specification`.
 - Do not create implementation `task` tickets or execution plans during story-building from product notes or ideas.
-- When the user later asks to implement a `US` or `use_case`, the implementer scans the current codebase and creates or updates task tickets under the relevant use cases.
+- When the user later asks to implement a `group` or `feature`, the implementer scans the current codebase and creates or updates task tickets under the relevant features.
 - Use source fields only for external references or imported raw input, not for local doc paths.
 - Do not change implementation code during story-building work.
 
 Distinguish source tickets from agent work tickets. If the user provides Jira, external Kanban, Linear, GitHub Issue, or other human-managed ticket references, use the source-specific skill or tool supplied by the user to fetch/explore them first. Store the discovered source system, id, URL, and snapshot directly on the Vibe Kanban work ticket fields. Do not create a separate Vibe Kanban ticket solely to mirror the external source ticket.
 
-Not every request needs a `US -> use_case` hierarchy. Use `US/use_case` for product stories and user-facing capabilities. If the user is organizing UAT feedback, QC feedback, technical maintenance, or standalone source-ticket-driven work, ask before forcing it into a user story. Use top-level `task`, `uat_feedback`, or `qc_feedback` tickets when that better represents the user's source material. Before recording a task-shaped item as top-level, run `smart-search "<title>" --parent-for task --json` and confirm the suggested parent and detected `kind` with the user, as described in the Vibe Kanban skill under "Task Kind And Parent Linking".
+Not every request needs a `group -> feature` hierarchy. Use `group/feature` for product stories and user-facing capabilities. If the user is organizing UAT feedback, QC feedback, technical maintenance, or standalone source-ticket-driven work, ask before forcing it into a user story. Use a feedback-themed top-level `group` or top-level `task` tickets when that better represents the user's source material. Before recording a task-shaped item as top-level, run `smart-search "<title>" --parent-for task --json` and confirm the suggested parent and detected `kind` with the user, as described in the Vibe Kanban skill under "Task Kind And Parent Linking".
 
 ## Analysis Checkpoints
 
@@ -51,34 +51,34 @@ When the question belongs to an existing ticket, record it with `node .agents/sk
 ## Create Story Workflow
 
 1. Normalize the user's raw notes into a concise product story structure.
-2. Identify the distinct use cases inside the story before creating tickets. A single `US` commonly has many `use_case` children; create as many as needed for clear review and implementation planning.
-3. Create the `US` ticket first:
+2. Identify the distinct features (use cases) inside the story before creating tickets. A single `group` commonly has many `feature` children; create as many as needed for clear review and implementation planning.
+3. Create the `group` ticket first:
 
    ```bash
-   node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type US --title "<story title>" --specification "<story markdown>"
+   node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type group --title "<story title>" --specification "<story markdown>"
    ```
 
-4. Create each `use_case` ticket under the `US` ticket. Reuse the same `<us-ticket-id>` for every use case that belongs to that story:
+4. Create each `feature` ticket under the `group` ticket. Reuse the same `<group-ticket-id>` for every feature that belongs to that group:
 
    ```bash
-   node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type use_case --parent-id <us-ticket-id> --title "<Verb Noun>" --specification "<use case markdown>"
+   node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type feature --parent-id <group-ticket-id> --title "<Verb Noun>" --specification "<feature markdown>"
    ```
 
-5. Return the created ticket IDs and hierarchy to the user. Group the response by `US -> use_case[]`; do not include `task[]` unless task tickets already existed before the story update.
+5. Return the created ticket IDs and hierarchy to the user. Group the response by `group -> feature[]`; do not include `task[]` unless task tickets already existed before the story update.
 6. Do not implement code during this workflow.
 
-Task tickets are intentionally deferred. If the user asks to execute a `US` or `use_case`, switch to the implementation workflow: scan the current project, then create or update the smallest reviewable `task` tickets with execution plans for approval. Actual code changes, branch checkout, commits, local review before PR, and GitHub CLI PR creation belong to `task-implementer`, not the story-building workflow.
+Task tickets are intentionally deferred. If the user asks to execute a `group` or `feature`, switch to the implementation workflow: scan the current project, then create or update the smallest reviewable `task` tickets with execution plans for approval. Actual code changes, branch checkout, commits, local review before PR, and GitHub CLI PR creation belong to `task-implementer`, not the story-building workflow.
 
 If the user asks to update existing story docs, read the relevant Vibe Kanban ticket tree with `get <id> --json`, then update ticket fields through Vibe Kanban. Preserve existing parent-child links unless the user asks to reorganize the story. If an approved task execution plan changes, tell the user the task must be reviewed again before implementation.
 
-When updating or reorganizing existing tickets, use Vibe Kanban `smart-search` to find related stories, use cases, source ids, and likely parents before asking the user for IDs. Ask only when several plausible matches remain.
+When updating or reorganizing existing tickets, use Vibe Kanban `smart-search` to find related groups, features, source ids, and likely parents before asking the user for IDs. Ask only when several plausible matches remain.
 
 ## Writing Standard
 
 Follow the use case standard from the user's reference:
 
 - Name use cases with `Verb + Noun`, such as `Create Invoice`, `Approve Order`, or `Reset Password`.
-- Split use cases by distinct actor intent or system outcome. Prefer several focused use cases under one `US` over one oversized use case with unrelated flows.
+- Split use cases by distinct actor intent or system outcome. Prefer several focused use cases under one `group` over one oversized use case with unrelated flows.
 - Focus on what the actor and system do, not implementation details such as service names, repositories, database tables, or framework calls.
 - Write main flows as meaningful steps alternating between actor action and system response where applicable.
 - Separate valid business alternatives from exceptions. Alternative flows still complete or redirect the business goal; exception flows describe failure or inability to complete.

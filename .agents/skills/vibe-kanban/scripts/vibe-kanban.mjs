@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { Server as SocketServer } from "socket.io";
 
 const STATUSES = ["open", "in_progress", "in_review", "closed", "hold", "cancelled"];
-const TICKET_TYPES = ["US", "use_case", "task", "uat_feedback", "qc_feedback"];
+const TICKET_TYPES = ["group", "feature", "task"];
 const KINDS = ["feature", "bugfix", "refactor", "chore", "docs", "test"];
 const KIND_SIGNALS = {
   bugfix: [["fix", 2], ["fixes", 2], ["fixed", 2], ["bug", 2], ["hotfix", 2], ["broken", 2], ["crash", 2], ["crashes", 2], ["regression", 2], ["defect", 2], ["not working", 2], ["does not work", 2], ["doesn't work", 2], ["error", 1], ["fail", 1], ["fails", 1], ["failing", 1], ["incorrect", 1], ["wrong", 1], ["lỗi", 2], ["sửa", 2], ["sai", 1]],
@@ -41,7 +41,7 @@ Commands:
   detect-kind <text> [--json]
   get <ticket-id> [--json]
   create --title <title> [--kind <kind>] [--raw-requirement <text|@file>] [--specification <text|@file>] [--execution-plan <text|@file>]
-  update <ticket-id> [--title <title>] [--type <US|use_case|task|uat_feedback|qc_feedback>] [--kind <kind>] [--parent-id <id>] [--specification <text|@file>] [--execution-plan <text|@file>]
+  update <ticket-id> [--title <title>] [--type <group|feature|task>] [--kind <kind>] [--parent-id <id>] [--specification <text|@file>] [--execution-plan <text|@file>]
   delete <ticket-id> [--cascade] [--description <text|@file>] [--json] [--quiet]
   approve <ticket-id> [--actor <name>] [--description <text|@file>] [--quiet]
   comment <ticket-id> --comment <text|@file> [--actor <name>] [--quiet]
@@ -64,7 +64,7 @@ Commands:
   serve [--host 127.0.0.1] [--port 8765]
 
 Options:
-  --type <US|use_case|task|uat_feedback|qc_feedback>
+  --type <group|feature|task>
   --kind <feature|bugfix|refactor|chore|docs|test>  (task kind; auto-detected on create when omitted)
   --status <open|in_progress|hold|cancelled|in_review|closed>
   --parent-id <id>
@@ -90,7 +90,7 @@ Options:
   --limit <n>
   --before <event-id>
   --cascade
-  --parent-for <US|use_case|task|uat_feedback|qc_feedback>
+  --parent-for <group|feature|task>
 
 Database:
   Defaults to .vibe-kanban/vibe-kanban.sqlite. Override with VIBE_KANBAN_DB.
@@ -152,7 +152,7 @@ function openDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       parent_id INTEGER REFERENCES tickets(id) ON DELETE SET NULL,
       title TEXT NOT NULL,
-      type TEXT NOT NULL DEFAULT 'US',
+      type TEXT NOT NULL DEFAULT 'group',
       status TEXT NOT NULL DEFAULT 'open',
       user_reviewed INTEGER NOT NULL DEFAULT 0,
       progress_percent INTEGER,
@@ -207,7 +207,7 @@ function openDb() {
       created_at TEXT NOT NULL
     );
   `);
-  ensureColumn(db, "tickets", "type", "TEXT NOT NULL DEFAULT 'US'");
+  ensureColumn(db, "tickets", "type", "TEXT NOT NULL DEFAULT 'group'");
   ensureColumn(db, "tickets", "parent_id", "INTEGER REFERENCES tickets(id) ON DELETE SET NULL");
   ensureColumn(db, "tickets", "progress_percent", "INTEGER");
   ensureColumn(db, "tickets", "pr_url", "TEXT");
@@ -219,7 +219,18 @@ function openDb() {
   ensureColumn(db, "tickets", "user_comments", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "tickets", "open_questions", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "tickets", "kind", "TEXT");
+  migrateLegacyTypes(db);
   return db;
+}
+
+// Older databases used US / use_case / uat_feedback / qc_feedback ticket types.
+function migrateLegacyTypes(db) {
+  db.exec(`
+    UPDATE tickets SET type = 'group' WHERE type = 'US';
+    UPDATE tickets SET type = 'feature' WHERE type = 'use_case';
+    UPDATE tickets SET type = CASE WHEN parent_id IS NULL THEN 'group' ELSE 'feature' END
+      WHERE type IN ('uat_feedback', 'qc_feedback');
+  `);
 }
 
 function ensureColumn(db, table, column, definition) {
@@ -230,7 +241,7 @@ function ensureColumn(db, table, column, definition) {
 }
 
 function normalizeType(type) {
-  const value = type || "US";
+  const value = type || "group";
   if (!TICKET_TYPES.includes(value)) {
     fail(`invalid ticket type: ${value}. Expected one of: ${TICKET_TYPES.join(", ")}`);
   }
@@ -305,19 +316,16 @@ function normalizeProgress(value) {
 
 function validateParent(db, parentId, type, ownId = null) {
   if (!parentId) {
-    if (type === "use_case") fail("use_case tickets must have a US parent");
+    if (type === "feature") fail("feature tickets must have a group parent");
     return null;
   }
   if (ownId && Number(parentId) === Number(ownId)) fail("ticket cannot be its own parent");
   const parent = db.prepare("SELECT id, type FROM tickets WHERE id = ?").get(parentId);
   if (!parent) fail(`parent ticket not found: ${parentId}`);
-  if (type === "US") fail("US tickets must not have a parent");
-  if (type === "use_case" && parent.type !== "US") fail("use_case tickets must be linked under a US ticket");
-  if (type === "task" && !["US", "use_case", "uat_feedback", "qc_feedback"].includes(parent.type)) {
-    fail("task tickets may be top-level or linked under US, use_case, uat_feedback, or qc_feedback tickets");
-  }
-  if ((type === "uat_feedback" || type === "qc_feedback") && parent.type !== "US") {
-    fail(`${type} tickets may be top-level or linked under a US ticket`);
+  if (type === "group") fail("group tickets must not have a parent");
+  if (type === "feature" && parent.type !== "group") fail("feature tickets must be linked under a group ticket");
+  if (type === "task" && !["group", "feature"].includes(parent.type)) {
+    fail("task tickets may be top-level or linked under group or feature tickets");
   }
   return parentId;
 }
@@ -392,10 +400,9 @@ function normalizeLimit(value, fallback = 10, max = 50) {
 
 function parentTypesFor(type) {
   const ticketType = normalizeType(type);
-  if (ticketType === "US") return [];
-  if (ticketType === "use_case") return ["US"];
-  if (ticketType === "task") return ["US", "use_case", "uat_feedback", "qc_feedback"];
-  if (ticketType === "uat_feedback" || ticketType === "qc_feedback") return ["US"];
+  if (ticketType === "group") return [];
+  if (ticketType === "feature") return ["group"];
+  if (ticketType === "task") return ["group", "feature"];
   return [];
 }
 
@@ -481,7 +488,7 @@ function suggestParent(results, parentFor) {
     reasons.push(`existing child tickets match: ${top.related_children.map((child) => `#${child.ticket_id}`).join(", ")}`);
   }
   if (second) reasons.push(`score ${top.score} vs next ${second.score}`);
-  if (top.ticket.type === "use_case") reasons.push("use_case parents are preferred for tasks");
+  if (top.ticket.type === "feature") reasons.push("feature parents are preferred for tasks");
   return {
     ticket_id: top.ticket.id,
     type: top.ticket.type,
@@ -557,7 +564,7 @@ function smartSearch(db, args) {
   const scored = entries
     .map((entry) => {
       let { score } = entry;
-      if (parentFor === "task" && entry.ticket.type === "use_case") score *= 1.15;
+      if (parentFor === "task" && entry.ticket.type === "feature") score *= 1.15;
       if (entry.ticket.status === "cancelled") score *= 0.5;
       return { ...entry, score: Math.round(score) };
     })
@@ -967,7 +974,7 @@ function seedTickets(db) {
   const samples = [
     {
       title: "Rewrite requirement into implementation specification",
-      type: "US",
+      type: "group",
       status: "open",
       raw_requirement: "As a coding agent, I need a raw user request to become a clear implementation spec before planning.",
       specification: `# Objective
@@ -1008,7 +1015,7 @@ Agents need a stable document before they inspect the codebase and prepare an ex
     },
     {
       title: "Approve execution plan before implementation starts",
-      type: "use_case",
+      type: "feature",
       status: "in_review",
       raw_requirement: "User must review the generated plan before the agent modifies implementation code.",
       specification: `# Objective
@@ -1084,8 +1091,8 @@ Record branch and commit metadata for implementation traceability.
 }
 
 function repairSampleHierarchy(db) {
-  const story = db.prepare("SELECT id FROM tickets WHERE source_type = 'sample' AND type = 'US' ORDER BY id LIMIT 1").get();
-  const useCase = db.prepare("SELECT id FROM tickets WHERE source_type = 'sample' AND type = 'use_case' ORDER BY id LIMIT 1").get();
+  const story = db.prepare("SELECT id FROM tickets WHERE source_type = 'sample' AND type = 'group' ORDER BY id LIMIT 1").get();
+  const useCase = db.prepare("SELECT id FROM tickets WHERE source_type = 'sample' AND type = 'feature' ORDER BY id LIMIT 1").get();
   const task = db.prepare("SELECT id FROM tickets WHERE source_type = 'sample' AND type = 'task' ORDER BY id LIMIT 1").get();
   if (story && useCase) {
     db.prepare("UPDATE tickets SET parent_id = ? WHERE id = ?").run(story.id, useCase.id);
@@ -1103,7 +1110,7 @@ function printTicketLines(items) {
     const parent = item.parent ? ` parent=#${item.parent.id}` : "";
     const via = item.related_children?.length ? ` via=${item.related_children.map((child) => `#${child.ticket_id}`).join(",")}` : "";
     const kind = ticket.kind ? `:${ticket.kind}` : "";
-    console.log(`${prefix}#${ticket.id} [${ticket.type || "US"}${kind}:${ticket.status}] ${ticket.title} reviewed=${ticket.user_reviewed}${parent}${matched}${via}`);
+    console.log(`${prefix}#${ticket.id} [${ticket.type || "group"}${kind}:${ticket.status}] ${ticket.title} reviewed=${ticket.user_reviewed}${parent}${matched}${via}`);
   }
 }
 
@@ -1147,7 +1154,7 @@ function print(value, jsonOutput, quiet = false) {
     if (value.evidence?.length) console.log(`evidence: ${value.evidence.join(", ")}`);
     return;
   }
-  console.log(`#${value.id} [${value.type || "US"}${value.kind ? `:${value.kind}` : ""}:${value.status}] ${value.title}`);
+  console.log(`#${value.id} [${value.type || "group"}${value.kind ? `:${value.kind}` : ""}:${value.status}] ${value.title}`);
   console.log(`reviewed: ${value.user_reviewed}`);
   console.log(`branch: ${value.branch || ""}`);
   console.log("");

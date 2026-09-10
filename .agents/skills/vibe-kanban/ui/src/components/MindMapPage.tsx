@@ -43,9 +43,7 @@ const fallbackViewport: ViewportSize = { width: 1180, height: 560 };
 
 function toneFor(node: TicketTreeNode) {
   if (node.type === "task") return "teal";
-  if (node.type === "use_case") return "fuchsia";
-  if (node.type === "uat_feedback") return "orange";
-  if (node.type === "qc_feedback") return "amber";
+  if (node.type === "feature") return "fuchsia";
   if (node.type === "orphan") return "amber";
   if (node.type === "project") return "violet";
   return "indigo";
@@ -233,9 +231,9 @@ export function MindMapPage({ tickets, onOpen }: MindMapPageProps) {
     viewX: number;
     viewY: number;
   } | null>(null);
-  const storyCount = tickets.filter((ticket) => ticket.type === "US").length;
+  const storyCount = tickets.filter((ticket) => ticket.type === "group").length;
   const useCaseCount = tickets.filter(
-    (ticket) => ticket.type === "use_case",
+    (ticket) => ticket.type === "feature",
   ).length;
   const taskCount = tickets.filter((ticket) => ticket.type === "task").length;
 
@@ -420,7 +418,8 @@ export function MindMapPage({ tickets, onOpen }: MindMapPageProps) {
                 No tickets to visualize
               </strong>
               <span className="text-sm text-neutral-500">
-                Create a US ticket with use cases and tasks to populate the map.
+                Create a group ticket with use cases and tasks to populate the
+                map.
               </span>
             </div>
           </div>

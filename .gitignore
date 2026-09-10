@@ -10,4 +10,4 @@ node_modules/
 
 source/*
 
-.agents/skills/*/assets/dist/
+vibe-kanban/assets/dist/

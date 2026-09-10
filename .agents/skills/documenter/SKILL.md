@@ -7,7 +7,7 @@ description: Create and update product group (user story) and feature (use case)
 
 Use this skill when the user asks to create, organize, or update product documentation, user stories, use cases, scenarios, requirements, acceptance criteria, or story planning.
 
-Use `documenter` for user-provided product requirements. If the user explicitly asks to infer or bootstrap stories from an existing codebase, use `auto-us` instead so CodeGraph-driven feature discovery happens first.
+Use `documenter` for user-provided product requirements. If the user explicitly asks to infer or bootstrap stories from an existing codebase, use `doc-collector` instead so CodeGraph-driven feature discovery happens first.
 
 All product documentation for this workflow lives in Vibe Kanban tickets. Do not create, update, or manage `documents/**`, `document.md`, product-doc `progress.md`, `.agents/processes/**/plan.md`, or `.agents/processes/**/progress.md` files for story work.
 
@@ -16,7 +16,7 @@ All product documentation for this workflow lives in Vibe Kanban tickets. Do not
 Use the project-local Vibe Kanban tool from the project root:
 
 ```bash
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs <command>
+pnpm -s vk <command>
 ```
 
 Model product documentation as linked tickets:
@@ -36,9 +36,15 @@ group
 - Use source fields only for external references or imported raw input, not for local doc paths.
 - Do not change implementation code during story-building work.
 
-Distinguish source tickets from agent work tickets. If the user provides Jira, external Kanban, Linear, GitHub Issue, or other human-managed ticket references, use the source-specific skill or tool supplied by the user to fetch/explore them first. Store the discovered source system, id, URL, and snapshot directly on the Vibe Kanban work ticket fields. Do not create a separate Vibe Kanban ticket solely to mirror the external source ticket.
+Distinguish source tickets from agent work tickets. If the user provides Jira, external Kanban, Linear, GitHub Issue, or other human-managed ticket references, read them first through the fitting plugin skill (for example `github-source`) or the tool the user supplies; if none fits, ask the user for the content. Preserve the source material, not only an agent-written summary:
 
-Not every request needs a `group -> feature` hierarchy. Use `group/feature` for product stories and user-facing capabilities. If the user is organizing UAT feedback, QC feedback, technical maintenance, or standalone source-ticket-driven work, ask before forcing it into a user story. Use a feedback-themed top-level `group` or top-level `task` tickets when that better represents the user's source material. Before recording a task-shaped item as top-level, run `smart-search "<title>" --parent-for task --json` and confirm the suggested parent and detected `kind` with the user, as described in the Vibe Kanban skill under "Task Kind And Parent Linking".
+- Store the source system, id, canonical URL, and a concise text snapshot on the Vibe Kanban work ticket.
+- Capture useful evidence exposed by the source tool, including screenshots, attached images, design references, logs, documents, and supporting URLs.
+- Fetch image or attachment metadata/content when the source tool supports it and the evidence affects requirements or acceptance criteria. Do not invent inaccessible evidence or embed credentials.
+- Store evidence with `--source-evidence <json|@file>` as an array of `{ "type": "image" | "link", "url": "https://...", "label": "...", "description": "..." }` objects. Keep provenance clear in the label or description.
+- Do not create a separate Vibe Kanban ticket solely to mirror the external source ticket.
+
+Not every request needs a `group -> feature` hierarchy. Use `group/feature` for product stories and user-facing capabilities. If the user is organizing UAT feedback, QC feedback, technical maintenance, or standalone source-ticket-driven work, ask before forcing it into a user story. Use a feedback-themed top-level `group` or top-level `task` tickets when that better represents the user's source material. Before recording a task-shaped item as top-level, run `smart-search "<title>" --parent-for task --json` and confirm the suggested parent and detected `kind` with the user, as described in the Vibe Kanban skill under "Free-Form Task Intake".
 
 ## Analysis Checkpoints
 
@@ -46,7 +52,7 @@ During story analysis, stop and ask the user before creating or updating tickets
 
 Ask one concise question that names the tradeoff or options. If the uncertainty is minor and does not affect product meaning, proceed with a documented assumption in the ticket `specification` instead of blocking.
 
-When the question belongs to an existing ticket, record it with `node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs questions <ticket-id> --questions "<markdown questions>" --description "Blocked pending user clarification" --quiet` so the ticket moves to `hold`. If a human-notification skill/tool is available, trigger it after recording the questions; otherwise ask in the current chat.
+When the question belongs to an existing ticket, record it with `pnpm -s vk questions <ticket-id> --questions "<markdown questions>" --description "Blocked pending user clarification" --quiet` so the ticket moves to `hold`. Then consider the installed skills that can carry questions to humans; ask the user in one question whether to send through the fitting plugin (name it and the channel) or answer here, record the outcome with `action-log --action-type plugin:<name>`, and ask in the current chat when nothing fits or the user declines.
 
 ## Create Story Workflow
 
@@ -55,13 +61,13 @@ When the question belongs to an existing ticket, record it with `node .agents/sk
 3. Create the `group` ticket first:
 
    ```bash
-   node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type group --title "<story title>" --specification "<story markdown>"
+   pnpm -s vk create --type group --title "<story title>" --specification "<story markdown>"
    ```
 
 4. Create each `feature` ticket under the `group` ticket. Reuse the same `<group-ticket-id>` for every feature that belongs to that group:
 
    ```bash
-   node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type feature --parent-id <group-ticket-id> --title "<Verb Noun>" --specification "<feature markdown>"
+   pnpm -s vk create --type feature --parent-id <group-ticket-id> --title "<Verb Noun>" --specification "<feature markdown>"
    ```
 
 5. Return the created ticket IDs and hierarchy to the user. Group the response by `group -> feature[]`; do not include `task[]` unless task tickets already existed before the story update.
@@ -70,6 +76,8 @@ When the question belongs to an existing ticket, record it with `node .agents/sk
 Task tickets are intentionally deferred. If the user asks to execute a `group` or `feature`, switch to the implementation workflow: scan the current project, then create or update the smallest reviewable `task` tickets with execution plans for approval. Actual code changes, branch checkout, commits, local review before PR, and GitHub CLI PR creation belong to `task-implementer`, not the story-building workflow.
 
 If the user asks to update existing story docs, read the relevant Vibe Kanban ticket tree with `get <id> --json`, then update ticket fields through Vibe Kanban. Preserve existing parent-child links unless the user asks to reorganize the story. If an approved task execution plan changes, tell the user the task must be reviewed again before implementation.
+
+When the story originates from an external source ticket, pass the captured source fields and evidence on create/update. Prefer `@file` for non-trivial JSON so shell quoting does not corrupt URLs or descriptions.
 
 When updating or reorganizing existing tickets, use Vibe Kanban `smart-search` to find related groups, features, source ids, and likely parents before asking the user for IDs. Ask only when several plausible matches remain.
 

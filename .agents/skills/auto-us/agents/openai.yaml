@@ -1,5 +1,0 @@
-interface:
-  display_name: "Auto US"
-  short_description: "Bootstrap group/feature tickets from an indexed codebase"
-policy:
-  allow_implicit_invocation: false

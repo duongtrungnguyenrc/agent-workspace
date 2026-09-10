@@ -81,7 +81,7 @@ pnpm dlx --yes skills add rohitg00/agentmemory -y
 
 
 for f in .agents/skills/*; do
-  [ -e "$f" ] || continue
+  [ -f "$f/SKILL.md" ] || continue
 
   name="$(basename "$f")"
 

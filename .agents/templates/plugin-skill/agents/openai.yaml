@@ -1,0 +1,3 @@
+interface:
+  display_name: "My Plugin"
+  short_description: "One-line description for Codex"

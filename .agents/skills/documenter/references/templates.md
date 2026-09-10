@@ -149,6 +149,13 @@ Create this only after enough source exploration to produce a grounded plan. Gro
 
 ## source/<child-project>
 
+- [ ] Inspect and confirm `<scope or flow>`.
+- [ ] Implement `<behavior>` in `<path or module>`.
+- [ ] Add or update `<tests>`.
+- [ ] Run `<focused verification>` and record the result.
+
+Each top-level checklist item is a monitorable execution step; `approve` requires at least one. Put supporting detail under the step as indented plain bullets, not as nested checkboxes.
+
 Files:
 
 - <path>
@@ -200,7 +207,7 @@ When human-managed UAT or QC feedback is not naturally a user story but needs re
 - During story-building, stop at `group -> feature[]`.
 - Keep task context in `task` ticket specifications only after implementation is requested.
 - Keep approval-required implementation plans in `task` ticket `execution_plan` fields only after source exploration.
-- For external source tickets, fetch/explore the source with the relevant user-provided skill first, then store `source_type`, `source_id`, `source_url`, and `source_snapshot` on the Vibe Kanban work ticket. Do not mirror source tickets as separate Vibe Kanban tickets.
+- For external source tickets, fetch/explore the source with the relevant user-provided skill first, then store `source_type`, `source_id`, `source_url`, `source_snapshot`, and relevant `source_evidence` on the Vibe Kanban work ticket. Preserve useful images and links instead of reducing the source to text only. Do not mirror source tickets as separate Vibe Kanban tickets.
 - Use top-level `task` tickets when source-ticket-driven work is not naturally part of a `group/feature` hierarchy. Ask the user before linking a standalone task to an existing parent.
 - During analysis, stop and ask before writing tickets when multiple intents, actors, workflows, ticket hierarchies, acceptance meanings, or product/UX/data decisions would produce different documentation. Record only minor non-behavioral assumptions directly in the ticket.
 - Do not create local `documents/**`, `document.md`, product-doc `progress.md`, `.agents/processes/**/plan.md`, or `.agents/processes/**/progress.md` files as part of this skill.

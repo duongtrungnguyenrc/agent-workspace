@@ -1,0 +1,3 @@
+interface:
+  display_name: "GitHub Source"
+  short_description: "GitHub issues as source tickets and Q&A channel"

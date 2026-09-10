@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { formatStatus, formatType, parentLabel } from "../lib/format";
+import { formatKind, formatStatus, formatType, parentLabel } from "../lib/format";
 import type {
   GroupBy,
+  TicketKind,
   TicketListItem,
   TicketStatus,
   TicketType,
@@ -13,6 +14,7 @@ interface KanbanBoardProps {
   allTickets: TicketListItem[];
   statuses: TicketStatus[];
   types: TicketType[];
+  kinds: TicketKind[];
   groupBy: GroupBy;
   onOpen: (id: number) => void;
   onMove: (id: number, status: TicketStatus) => void;
@@ -35,6 +37,20 @@ function groupsFor(props: KanbanBoardProps): Group[] {
       label: formatType(type),
       tickets: props.tickets.filter((ticket) => ticket.type === type),
     }));
+  }
+  if (props.groupBy === "kind") {
+    return [
+      ...props.kinds.map((kind) => ({
+        key: kind,
+        label: formatKind(kind),
+        tickets: props.tickets.filter((ticket) => ticket.kind === kind),
+      })),
+      {
+        key: "no-kind",
+        label: "No kind",
+        tickets: props.tickets.filter((ticket) => !ticket.kind),
+      },
+    ];
   }
   if (props.groupBy === "review") {
     return [

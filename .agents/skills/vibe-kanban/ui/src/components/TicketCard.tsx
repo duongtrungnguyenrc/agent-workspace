@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  formatKind,
   formatStatus,
   formatType,
   parentLabel,
@@ -10,6 +11,7 @@ import {
   borderToneClass,
   buttonClass,
   buttonTone,
+  kindTone,
   statusTone,
   ticketCodeClass,
   typeTone,
@@ -41,7 +43,7 @@ export function TicketCard({
 
   return (
     <button
-      className={`grid min-w-0 w-full gap-y-3 rounded-md border border-l-4 bg-white p-3 text-left shadow-[0_1px_2px_rgb(15_23_42/0.04)] transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-neutral-950/10 active:translate-y-px ${dragging ? "scale-[0.98] opacity-60" : ""} ${borderToneClass(typeTone[ticket.type])}`}
+      className={`grid min-w-0 w-full gap-y-3 rounded-xl border border-l-4 bg-white p-3 text-left shadow-[0_1px_2px_rgb(15_23_42/0.04)] transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-neutral-950/10 active:translate-y-px ${dragging ? "scale-[0.98] opacity-60" : ""} ${borderToneClass(typeTone[ticket.type])}`}
       draggable
       onDragStart={(event) => {
         setDragging(true);
@@ -64,9 +66,14 @@ export function TicketCard({
       </header>
 
       <div className="flex items-center justify-between gap-3">
-        <Badge tone={statusTone[ticket.status]}>
-          {formatStatus(ticket.status)}
-        </Badge>
+        <div className="flex min-w-0 flex-wrap gap-1.5">
+          <Badge tone={statusTone[ticket.status]}>
+            {formatStatus(ticket.status)}
+          </Badge>
+          {ticket.kind ? (
+            <Badge tone={kindTone[ticket.kind]}>{formatKind(ticket.kind)}</Badge>
+          ) : null}
+        </div>
         <span className="shrink-0 text-xs font-bold text-neutral-500">
           {progress}%
         </span>

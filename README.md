@@ -191,13 +191,15 @@ example:
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs <command>
 ```
 
-Useful discovery command:
+Useful discovery commands:
 
 ```bash
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs smart-search "<query>" --parent-for task --json
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs detect-kind "<task request>" --json
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs activity --limit 50 --json
 ```
 
-Use `smart-search` when an agent needs related Vibe Kanban context, such as finding a likely parent before linking or implementing a task.
+Use `smart-search` when an agent needs related Vibe Kanban context, such as finding a likely parent before linking or implementing a task. Its output includes the detected task kind (`feature`, `bugfix`, `refactor`, `chore`, `docs`, `test`) and a parent suggestion with confidence; the agent confirms both with the developer before creating a free-form task. Tickets can be removed with `delete <ticket-id> [--cascade]`; the activity log keeps a `ticket.deleted` audit entry.
 
 Pending approval and blocked-question commands:
 

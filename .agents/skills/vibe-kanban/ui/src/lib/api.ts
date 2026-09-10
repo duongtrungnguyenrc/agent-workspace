@@ -1,4 +1,4 @@
-import type { ActivityCollection, TicketCollection, TicketDetail } from "../types/kanban";
+import type { ActivityCollection, DeleteResult, TicketCollection, TicketDetail } from "../types/kanban";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, options);
@@ -11,7 +11,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   tickets: () => request<TicketCollection>("/api/tickets"),
-  activity: () => request<ActivityCollection>("/api/activity"),
+  activity: (params: { limit?: number; before?: number | null } = {}) => {
+    const search = new URLSearchParams();
+    if (params.limit) search.set("limit", String(params.limit));
+    if (params.before) search.set("before", String(params.before));
+    const query = search.toString();
+    return request<ActivityCollection>(`/api/activity${query ? `?${query}` : ""}`);
+  },
   ticket: (id: number) => request<TicketDetail>(`/api/tickets/${id}`),
   createTicket: (body: Record<string, FormDataEntryValue>) =>
     request<TicketDetail>("/api/tickets", {
@@ -24,6 +30,12 @@ export const api = {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
+    }),
+  deleteTicket: (id: number, cascade: boolean) =>
+    request<DeleteResult>(`/api/tickets/${id}/delete`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cascade }),
     }),
   action: (id: number, action: string, body?: Record<string, unknown>) =>
     request<TicketDetail>(`/api/tickets/${id}/${action}`, {

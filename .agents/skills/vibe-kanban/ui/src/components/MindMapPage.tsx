@@ -35,10 +35,10 @@ interface ViewportSize {
   height: number;
 }
 
-const xGap = 330;
-const yGap = 142;
-const nodeWidth = 242;
-const nodeHeight = 140;
+const xGap = 360;
+const yGap = 160;
+const nodeWidth = 280;
+const nodeHeight = 150;
 const fallbackViewport: ViewportSize = { width: 1180, height: 560 };
 
 function toneFor(node: TicketTreeNode) {
@@ -176,37 +176,39 @@ function GraphCard({
       x={graphNode.x - nodeWidth / 2}
       y={graphNode.y - nodeHeight / 2}
     >
-      <button
-        className={`grid h-full w-full content-start gap-2 overflow-hidden rounded-xl border border-l-4 p-3 text-left shadow-lg shadow-neutral-950/10 transition hover:-translate-y-0.5 ${borderToneClass(tone)}`}
-        type="button"
-        onClick={() => node.ticket && onOpen(node.ticket.id)}
-      >
-        <span className="truncate font-mono text-xs font-bold uppercase tracking-normal text-violet-700">
-          {node.code}
-        </span>
-        <strong className="line-clamp-2 min-w-0 break-words text-sm font-bold leading-5 text-neutral-950">
-          {node.title}
-        </strong>
-        <span className="flex min-w-0 flex-wrap gap-1">
-          <Badge tone={typeToneValue}>{node.typeLabel}</Badge>
-          <Badge tone={statusToneValue}>
-            {node.status === "project"
-              ? node.statusLabel
-              : formatStatus(node.status)}
-          </Badge>
-        </span>
-        <span className="mt-auto grid grid-cols-[34px_minmax(0,1fr)] items-center gap-2">
-          <span className="text-right text-xs font-bold text-neutral-500">
-            {node.progress}%
+      <div className="p-2">
+        <button
+          className={`grid h-full w-full content-start gap-2 overflow-hidden rounded-xl border border-l-4 p-3 text-left shadow-lg shadow-neutral-950/10 transition hover:-translate-y-0.5 ${borderToneClass(tone)}`}
+          type="button"
+          onClick={() => node.ticket && onOpen(node.ticket.id)}
+        >
+          <span className="truncate font-mono text-xs font-bold uppercase tracking-normal text-violet-700">
+            {node.code}
           </span>
-          <span className="h-2 overflow-hidden rounded-full bg-white/80">
-            <i
-              className={`block h-full rounded-full ${fillToneClass(statusToneValue)}`}
-              style={{ width: `${node.progress}%` }}
-            />
+          <strong className="line-clamp-2 min-w-0 wrap-break-word truncate text-sm font-bold leading-5 text-neutral-950">
+            {node.title}
+          </strong>
+          <span className="flex min-w-0 flex-wrap gap-1">
+            <Badge tone={typeToneValue}>{node.typeLabel}</Badge>
+            <Badge tone={statusToneValue}>
+              {node.status === "project"
+                ? node.statusLabel
+                : formatStatus(node.status)}
+            </Badge>
           </span>
-        </span>
-      </button>
+          <span className="mt-auto grid grid-cols-[34px_minmax(0,1fr)] items-center gap-2">
+            <span className="text-right text-xs font-bold text-neutral-500">
+              {node.progress}%
+            </span>
+            <span className="h-2 overflow-hidden rounded-full bg-white/80">
+              <i
+                className={`block h-full rounded-full ${fillToneClass(statusToneValue)}`}
+                style={{ width: `${node.progress}%` }}
+              />
+            </span>
+          </span>
+        </button>
+      </div>
     </foreignObject>
   );
 }

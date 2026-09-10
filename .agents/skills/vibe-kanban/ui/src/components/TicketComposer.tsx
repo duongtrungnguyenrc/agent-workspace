@@ -1,10 +1,11 @@
 import { useState } from "react";
-import type { TicketListItem, TicketType } from "../types/kanban";
-import { formatType, ticketCode } from "../lib/format";
+import type { TicketKind, TicketListItem, TicketType } from "../types/kanban";
+import { formatKind, formatType, ticketCode } from "../lib/format";
 import { buttonClass, fieldClass, inputClass, panelClass, selectClass, textareaClass } from "../lib/styles";
 
 interface TicketComposerProps {
   types: TicketType[];
+  kinds: TicketKind[];
   tickets: TicketListItem[];
   onCreate: (data: Record<string, FormDataEntryValue>) => Promise<void>;
 }
@@ -16,7 +17,7 @@ function eligibleParents(type: TicketType, tickets: TicketListItem[]) {
   return [];
 }
 
-export function TicketComposer({ types, tickets, onCreate }: TicketComposerProps) {
+export function TicketComposer({ types, kinds, tickets, onCreate }: TicketComposerProps) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<TicketType>("US");
   const parents = eligibleParents(type, tickets);
@@ -41,13 +42,14 @@ export function TicketComposer({ types, tickets, onCreate }: TicketComposerProps
             const form = event.currentTarget;
             const data = Object.fromEntries(new FormData(form).entries());
             if (!data.parent_id) delete data.parent_id;
+            if (!data.kind) delete data.kind;
             await onCreate(data);
             form.reset();
             setType("US");
             setOpen(false);
           }}
         >
-          <div className="grid gap-3 lg:grid-cols-[1fr_180px_1fr]">
+          <div className="grid gap-3 lg:grid-cols-[1fr_160px_160px_1fr]">
             <label className={fieldClass}>
               <span>Title</span>
               <input className={inputClass} name="title" required />
@@ -58,6 +60,17 @@ export function TicketComposer({ types, tickets, onCreate }: TicketComposerProps
                 {types.map((item) => (
                   <option key={item} value={item}>
                     {formatType(item)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={fieldClass}>
+              <span>Kind</span>
+              <select className={selectClass} name="kind" defaultValue="">
+                <option value="">{type === "task" ? "Auto-detect" : "None"}</option>
+                {kinds.map((item) => (
+                  <option key={item} value={item}>
+                    {formatKind(item)}
                   </option>
                 ))}
               </select>

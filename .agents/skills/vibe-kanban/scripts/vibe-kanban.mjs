@@ -9,6 +9,15 @@ import { Server as SocketServer } from "socket.io";
 
 const STATUSES = ["open", "in_progress", "in_review", "closed", "hold", "cancelled"];
 const TICKET_TYPES = ["US", "use_case", "task", "uat_feedback", "qc_feedback"];
+const KINDS = ["feature", "bugfix", "refactor", "chore", "docs", "test"];
+const KIND_SIGNALS = {
+  bugfix: [["fix", 2], ["fixes", 2], ["fixed", 2], ["bug", 2], ["hotfix", 2], ["broken", 2], ["crash", 2], ["crashes", 2], ["regression", 2], ["defect", 2], ["not working", 2], ["does not work", 2], ["doesn't work", 2], ["error", 1], ["fail", 1], ["fails", 1], ["failing", 1], ["incorrect", 1], ["wrong", 1], ["lỗi", 2], ["sửa", 2], ["sai", 1]],
+  feature: [["feature", 2], ["implement", 2], ["introduce", 2], ["add", 1], ["new", 1], ["create", 1], ["support", 1], ["enable", 1], ["allow", 1], ["build", 1], ["tính năng", 2], ["thêm", 1], ["mới", 1]],
+  refactor: [["refactor", 2], ["refactoring", 2], ["cleanup", 2], ["clean up", 2], ["restructure", 2], ["simplify", 2], ["extract", 2], ["rename", 2], ["tech debt", 2], ["reorganize", 2], ["tái cấu trúc", 2]],
+  chore: [["chore", 2], ["upgrade", 2], ["bump", 2], ["dependency", 2], ["dependencies", 2], ["tooling", 2], ["maintenance", 2], ["config", 1], ["configuration", 1], ["ci", 1], ["pipeline", 1], ["migrate", 1], ["setup", 1], ["cấu hình", 2]],
+  docs: [["docs", 2], ["documentation", 2], ["readme", 2], ["document", 1], ["guide", 1], ["tài liệu", 2]],
+  test: [["test", 2], ["tests", 2], ["testing", 2], ["spec", 1], ["coverage", 2], ["e2e", 2], ["unit test", 2], ["integration test", 2], ["kiểm thử", 2]],
+};
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const skillRoot = resolve(__dirname, "..");
@@ -28,10 +37,12 @@ vibe-kanban <command> [options]
 
 Commands:
   list [--json]
-  smart-search <query> [--json] [--type <type>] [--status <status>] [--parent-for <type>] [--limit <n>]
+  smart-search <query> [--json] [--type <type>] [--kind <kind>] [--status <status>] [--parent-for <type>] [--limit <n>]
+  detect-kind <text> [--json]
   get <ticket-id> [--json]
-  create --title <title> [--raw-requirement <text|@file>] [--specification <text|@file>] [--execution-plan <text|@file>]
-  update <ticket-id> [--title <title>] [--type <US|use_case|task|uat_feedback|qc_feedback>] [--parent-id <id>] [--specification <text|@file>] [--execution-plan <text|@file>]
+  create --title <title> [--kind <kind>] [--raw-requirement <text|@file>] [--specification <text|@file>] [--execution-plan <text|@file>]
+  update <ticket-id> [--title <title>] [--type <US|use_case|task|uat_feedback|qc_feedback>] [--kind <kind>] [--parent-id <id>] [--specification <text|@file>] [--execution-plan <text|@file>]
+  delete <ticket-id> [--cascade] [--description <text|@file>] [--json] [--quiet]
   approve <ticket-id> [--actor <name>] [--description <text|@file>] [--quiet]
   comment <ticket-id> --comment <text|@file> [--actor <name>] [--quiet]
   questions <ticket-id> --questions <text|@file> [--description <text|@file>] [--quiet]
@@ -48,11 +59,13 @@ Commands:
   pipeline <ticket-id> [--pipeline-status <status>] [--pipeline-url <url>] [--description <text|@file>] [--quiet]
   action-log <ticket-id> --description <text|@file> [--action-type <type>] [--status <status>] [--url <url>] [--quiet]
   events <ticket-id> [--json]
+  activity [--json] [--limit <n>] [--before <event-id>]
   seed [--json]
   serve [--host 127.0.0.1] [--port 8765]
 
 Options:
   --type <US|use_case|task|uat_feedback|qc_feedback>
+  --kind <feature|bugfix|refactor|chore|docs|test>  (task kind; auto-detected on create when omitted)
   --status <open|in_progress|hold|cancelled|in_review|closed>
   --parent-id <id>
   --source-type <type>
@@ -75,6 +88,8 @@ Options:
   --progress-percent <0-100>
   --query <text>
   --limit <n>
+  --before <event-id>
+  --cascade
   --parent-for <US|use_case|task|uat_feedback|qc_feedback>
 
 Database:
@@ -93,7 +108,7 @@ function parseArgs(argv) {
       continue;
     }
     const key = token.slice(2).replaceAll("-", "_");
-    if (key === "json" || key === "help" || key === "quiet") {
+    if (key === "json" || key === "help" || key === "quiet" || key === "cascade") {
       args[key] = true;
       continue;
     }
@@ -203,6 +218,7 @@ function openDb() {
   ensureColumn(db, "tickets", "action_items", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "tickets", "user_comments", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "tickets", "open_questions", "TEXT NOT NULL DEFAULT ''");
+  ensureColumn(db, "tickets", "kind", "TEXT");
   return db;
 }
 
@@ -219,6 +235,58 @@ function normalizeType(type) {
     fail(`invalid ticket type: ${value}. Expected one of: ${TICKET_TYPES.join(", ")}`);
   }
   return value;
+}
+
+function normalizeKind(value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (!KINDS.includes(value)) {
+    fail(`invalid ticket kind: ${value}. Expected one of: ${KINDS.join(", ")}`);
+  }
+  return value;
+}
+
+function signalHits(text, signal) {
+  if (!text) return 0;
+  if (/[^a-z0-9 ]/u.test(signal) || signal.includes(" ")) {
+    return text.split(signal).length - 1;
+  }
+  return (text.match(new RegExp(`\\b${signal}\\b`, "g")) || []).length;
+}
+
+function detectKind({ title = "", body = "" } = {}) {
+  const titleText = String(title).toLowerCase();
+  const bodyText = String(body).toLowerCase();
+  const scores = [];
+  for (const kind of KINDS) {
+    let score = 0;
+    const evidence = [];
+    for (const [signal, weight] of KIND_SIGNALS[kind]) {
+      const inTitle = signalHits(titleText, signal);
+      const inBody = signalHits(bodyText, signal);
+      if (inTitle) {
+        score += weight * 2 * inTitle;
+        evidence.push(`title:${signal}`);
+      }
+      if (inBody) {
+        score += weight * Math.min(inBody, 3);
+        evidence.push(`body:${signal}`);
+      }
+    }
+    scores.push({ kind, score, evidence });
+  }
+  scores.sort((a, b) => b.score - a.score || KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind));
+  const [top, second] = scores;
+  if (!top || top.score === 0) {
+    return { kind: null, confidence: "none", evidence: [], scores: {} };
+  }
+  const ratio = second && second.score > 0 ? top.score / second.score : Infinity;
+  const confidence = ratio >= 2 && top.score >= 4 ? "high" : ratio > 1 ? "medium" : "low";
+  return {
+    kind: top.kind,
+    confidence,
+    evidence: top.evidence,
+    scores: Object.fromEntries(scores.filter((entry) => entry.score > 0).map((entry) => [entry.kind, entry.score])),
+  };
 }
 
 function normalizeParentId(value) {
@@ -274,6 +342,7 @@ function boolRow(row) {
   return {
     ...row,
     user_reviewed: Boolean(row.user_reviewed),
+    kind: row.kind || null,
     raw_requirement: row.raw_requirement || "",
     specification: row.specification || "",
     execution_plan: row.execution_plan || "",
@@ -300,9 +369,9 @@ function requireTicket(db, id) {
   if (!ticket) fail(`ticket not found: ${id}`);
   const full = boolRow(ticket);
   full.parent = full.parent_id
-    ? boolRow(db.prepare("SELECT id, parent_id, title, type, status, user_reviewed FROM tickets WHERE id = ?").get(full.parent_id))
+    ? boolRow(db.prepare("SELECT id, parent_id, title, type, kind, status, user_reviewed FROM tickets WHERE id = ?").get(full.parent_id))
     : null;
-  full.children = db.prepare("SELECT id, parent_id, title, type, status, user_reviewed FROM tickets WHERE parent_id = ? ORDER BY type, id").all(full.id).map(boolRow);
+  full.children = db.prepare("SELECT id, parent_id, title, type, kind, status, user_reviewed FROM tickets WHERE parent_id = ? ORDER BY type, id").all(full.id).map(boolRow);
   full.revisions = db.prepare("SELECT * FROM ticket_revisions WHERE ticket_id = ? ORDER BY id").all(full.id);
   full.commits = db.prepare("SELECT * FROM ticket_commits WHERE ticket_id = ? ORDER BY id").all(full.id);
   full.events = db.prepare("SELECT * FROM ticket_events WHERE ticket_id = ? ORDER BY id").all(full.id)
@@ -314,11 +383,11 @@ function listTickets(db) {
   return db.prepare("SELECT * FROM tickets ORDER BY updated_at DESC, id DESC").all().map(boolRow);
 }
 
-function normalizeLimit(value, fallback = 10) {
+function normalizeLimit(value, fallback = 10, max = 50) {
   if (value === undefined || value === null || value === "") return fallback;
   const limit = Number(value);
   if (!Number.isInteger(limit) || limit <= 0) fail(`invalid limit: ${value}`);
-  return Math.min(limit, 50);
+  return Math.min(limit, max);
 }
 
 function parentTypesFor(type) {
@@ -341,18 +410,47 @@ function uniqueTokens(value) {
   return [...new Set(textTokens(value))];
 }
 
-function fieldScore(value, tokens, exactQuery, weight) {
+const SEARCH_FIELDS = [
+  ["title", 8],
+  ["source_id", 7],
+  ["source_url", 4],
+  ["source_type", 3],
+  ["specification", 3],
+  ["raw_requirement", 3],
+  ["source_snapshot", 3],
+  ["open_questions", 3],
+  ["user_comments", 2],
+  ["execution_plan", 2],
+  ["action_items", 1],
+  ["branch", 1],
+];
+
+function fieldScore(value, tokens, exactQuery, weight, tokenWeights) {
   const text = String(value || "").toLowerCase();
   if (!text) return { score: 0, matched: false };
   let score = exactQuery && text.includes(exactQuery) ? weight * 4 : 0;
   let matched = score > 0;
   for (const token of tokens) {
     if (text.includes(token)) {
-      score += weight;
+      score += weight * (tokenWeights[token] || 1);
       matched = true;
     }
   }
   return { score, matched };
+}
+
+function searchableText(ticket) {
+  return SEARCH_FIELDS.map(([name]) => String(ticket[name] || "")).join("\n").toLowerCase();
+}
+
+// Rare query tokens count more than words shared by most tickets (e.g. "email", "review").
+function tokenWeights(rows, tokens) {
+  const texts = rows.map(searchableText);
+  const total = texts.length || 1;
+  return Object.fromEntries(tokens.map((token) => {
+    const df = texts.filter((text) => text.includes(token)).length;
+    return [token, Math.log((total + 1) / (df + 1)) + 1];
+  }));
 }
 
 function summarizeTicket(row) {
@@ -362,6 +460,7 @@ function summarizeTicket(row) {
     parent_id: row.parent_id,
     title: row.title,
     type: row.type,
+    kind: row.kind,
     status: row.status,
     user_reviewed: row.user_reviewed,
     source_type: row.source_type,
@@ -369,6 +468,31 @@ function summarizeTicket(row) {
     source_url: row.source_url,
     updated_at: row.updated_at,
   });
+}
+
+function suggestParent(results, parentFor) {
+  if (!parentFor || !results.length) return null;
+  const [top, second] = results;
+  const ratio = second ? top.score / second.score : Infinity;
+  const strongMatch = ["title", "source_id", "id", "children"].some((field) => top.matched_fields.includes(field));
+  const confidence = ratio >= 1.6 && strongMatch ? "high" : ratio > 1 ? "medium" : "low";
+  const reasons = [`matched ${top.matched_fields.join(", ")}`];
+  if (top.related_children.length) {
+    reasons.push(`existing child tickets match: ${top.related_children.map((child) => `#${child.ticket_id}`).join(", ")}`);
+  }
+  if (second) reasons.push(`score ${top.score} vs next ${second.score}`);
+  if (top.ticket.type === "use_case") reasons.push("use_case parents are preferred for tasks");
+  return {
+    ticket_id: top.ticket.id,
+    type: top.ticket.type,
+    title: top.ticket.title,
+    confidence,
+    reason: reasons.join("; "),
+    candidates: results.slice(0, 3).map((result) => ({ ticket_id: result.ticket.id, type: result.ticket.type, title: result.ticket.title, score: result.score })),
+    next_step: confidence === "high"
+      ? "State the suggested parent to the user and link it unless the user objects."
+      : "Ask the user to confirm the parent from the candidates before linking.",
+  };
 }
 
 function smartSearch(db, args) {
@@ -383,87 +507,130 @@ function smartSearch(db, args) {
   if (args.status && !STATUSES.includes(args.status)) {
     fail(`invalid status: ${args.status}. Expected one of: ${STATUSES.join(", ")}`);
   }
+  const kindFilter = normalizeKind(args.kind);
 
   const rows = listTickets(db);
-  const filtered = rows.filter((ticket) => {
-    if (args.type && ticket.type !== normalizeType(args.type)) return false;
-    if (args.status && ticket.status !== args.status) return false;
-    if (allowedParentTypes && !allowedParentTypes.includes(ticket.type)) return false;
-    return true;
-  });
-
-  const scored = filtered.map((ticket) => {
-    const fields = [
-      ["title", ticket.title, 8],
-      ["source_id", ticket.source_id, 7],
-      ["source_url", ticket.source_url, 4],
-      ["source_type", ticket.source_type, 3],
-      ["specification", ticket.specification, 3],
-      ["raw_requirement", ticket.raw_requirement, 3],
-      ["source_snapshot", ticket.source_snapshot, 3],
-      ["open_questions", ticket.open_questions, 3],
-      ["user_comments", ticket.user_comments, 2],
-      ["execution_plan", ticket.execution_plan, 2],
-      ["action_items", ticket.action_items, 1],
-      ["branch", ticket.branch, 1],
-    ];
+  const weights = tokenWeights(rows, tokens);
+  const scoreTicket = (ticket) => {
     let score = 0;
     const matched_fields = [];
-    for (const [name, value, weight] of fields) {
-      const result = fieldScore(value, tokens, exactQuery, weight);
+    for (const [name, weight] of SEARCH_FIELDS) {
+      const result = fieldScore(ticket[name], tokens, exactQuery, weight, weights);
       score += result.score;
       if (result.matched) matched_fields.push(name);
     }
-    if (String(ticket.id) === query) {
+    if (String(ticket.id) === query || `vk-${ticket.id}` === exactQuery) {
       score += 100;
       matched_fields.push("id");
     }
-    return { ticket, score, matched_fields };
-  })
+    const titleText = String(ticket.title || "").toLowerCase();
+    const titleCoverage = tokens.length ? tokens.filter((token) => titleText.includes(token)).length / tokens.length : 0;
+    if (titleCoverage === 1 && tokens.length > 1) score += 8;
+    return { score, matched_fields };
+  };
+  const allScores = new Map(rows.map((ticket) => [ticket.id, scoreTicket(ticket)]));
+
+  const entries = rows
+    .filter((ticket) => {
+      if (args.type && ticket.type !== normalizeType(args.type)) return false;
+      if (kindFilter && ticket.kind !== kindFilter) return false;
+      if (args.status && ticket.status !== args.status) return false;
+      if (allowedParentTypes && !allowedParentTypes.includes(ticket.type)) return false;
+      return true;
+    })
+    .map((ticket) => ({ ticket, ...allScores.get(ticket.id), related_children: [] }));
+
+  if (allowedParentTypes) {
+    // A strongly matching existing child (e.g. a task with the same source id) is evidence for its parent.
+    const byId = new Map(entries.map((entry) => [entry.ticket.id, entry]));
+    for (const ticket of rows) {
+      if (byId.has(ticket.id) || !ticket.parent_id) continue;
+      const own = allScores.get(ticket.id);
+      const parentEntry = byId.get(ticket.parent_id);
+      if (!parentEntry || !own || own.score <= 0) continue;
+      parentEntry.score += own.score * 0.6;
+      parentEntry.related_children.push({ ticket_id: ticket.id, type: ticket.type, title: ticket.title, score: Math.round(own.score) });
+      if (!parentEntry.matched_fields.includes("children")) parentEntry.matched_fields.push("children");
+    }
+  }
+
+  const scored = entries
+    .map((entry) => {
+      let { score } = entry;
+      if (parentFor === "task" && entry.ticket.type === "use_case") score *= 1.15;
+      if (entry.ticket.status === "cancelled") score *= 0.5;
+      return { ...entry, score: Math.round(score) };
+    })
     .filter((result) => result.score > 0)
     .sort((a, b) => b.score - a.score || new Date(b.ticket.updated_at) - new Date(a.ticket.updated_at) || b.ticket.id - a.ticket.id)
     .slice(0, limit);
 
-  return scored.map(({ ticket, score, matched_fields }) => {
+  const results = scored.map(({ ticket, score, matched_fields, related_children }) => {
     const parent = ticket.parent_id
       ? db.prepare("SELECT * FROM tickets WHERE id = ?").get(ticket.parent_id)
       : null;
-    const children = db.prepare("SELECT id, parent_id, title, type, status, user_reviewed, source_type, source_id, source_url, updated_at FROM tickets WHERE parent_id = ? ORDER BY type, id")
+    const children = db.prepare("SELECT id, parent_id, title, type, kind, status, user_reviewed, source_type, source_id, source_url, updated_at FROM tickets WHERE parent_id = ? ORDER BY type, id")
       .all(ticket.id);
     return {
       score,
       matched_fields,
+      related_children: related_children.sort((a, b) => b.score - a.score).slice(0, 3),
       ticket: summarizeTicket(ticket),
       parent: summarizeTicket(parent),
       children: children.map(summarizeTicket),
     };
   });
+
+  return {
+    query,
+    kind_detection: detectKind({ title: query }),
+    parent_for: parentFor,
+    parent_suggestion: suggestParent(results, parentFor),
+    results,
+  };
 }
 
 function createTicket(db, args) {
   if (!args.title) fail("create requires --title");
   const stamp = now();
   const git = currentGit();
+  const type = normalizeType(args.type);
+  const parentId = validateParent(db, normalizeParentId(args.parent_id), type);
+  const rawRequirement = readValue(args.raw_requirement);
+  const specification = readValue(args.specification);
+  const executionPlan = readValue(args.execution_plan);
+  const sourceSnapshot = readValue(args.source_snapshot);
+  let kind = normalizeKind(args.kind);
+  let kindSource = kind ? "explicit" : null;
+  let kindDetection = null;
+  if (!kind && type === "task") {
+    kindDetection = detectKind({ title: args.title, body: [rawRequirement, specification, sourceSnapshot].join("\n") });
+    if (kindDetection.kind) {
+      kind = kindDetection.kind;
+      kindSource = "detected";
+    }
+  }
   const result = db.prepare(`
     INSERT INTO tickets (
       parent_id, title, raw_requirement, specification, execution_plan, source_type,
-      source_id, source_url, source_snapshot, branch, base_commit, type,
+      source_id, source_url, source_snapshot, branch, base_commit, type, kind,
       head_commit, pr_url, pr_number, pr_status, pipeline_status, pipeline_url,
       action_items, user_comments, open_questions, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    validateParent(db, normalizeParentId(args.parent_id), normalizeType(args.type)),
+    parentId,
     args.title,
-    readValue(args.raw_requirement),
-    readValue(args.specification),
-    readValue(args.execution_plan),
+    rawRequirement,
+    specification,
+    executionPlan,
     args.source_type || null,
     args.source_id || null,
     args.source_url || null,
-    readValue(args.source_snapshot),
+    sourceSnapshot,
     args.branch || git.branch,
     args.base_commit || git.head_commit,
-    normalizeType(args.type),
+    type,
+    kind,
     args.head_commit || git.head_commit,
     args.pr_url || null,
     args.pr_number || null,
@@ -477,10 +644,50 @@ function createTicket(db, args) {
     stamp,
   );
   const ticketId = Number(result.lastInsertRowid);
-  if (args.specification) revision(db, ticketId, "specification", readValue(args.specification));
-  if (args.execution_plan) revision(db, ticketId, "execution_plan", readValue(args.execution_plan));
-  recordEvent(db, ticketId, "ticket.created", { title: args.title });
+  if (specification) revision(db, ticketId, "specification", specification);
+  if (executionPlan) revision(db, ticketId, "execution_plan", executionPlan);
+  recordEvent(db, ticketId, "ticket.created", {
+    title: args.title,
+    type,
+    parent_id: parentId,
+    kind,
+    kind_source: kindSource,
+    kind_confidence: kindDetection?.confidence || null,
+    description: eventDescription(args),
+  }, args.actor || "agent");
   return requireTicket(db, ticketId);
+}
+
+function deleteTicket(db, id, args = {}) {
+  const ticket = requireTicket(db, id);
+  if (ticket.children.length && !args.cascade) {
+    fail(`ticket ${ticket.id} has ${ticket.children.length} child ticket(s); re-link them first or pass --cascade to delete the whole subtree`);
+  }
+  const deleted = [];
+  const remove = (current) => {
+    for (const child of current.children) remove(requireTicket(db, child.id));
+    recordEvent(db, current.id, "ticket.deleted", {
+      title: current.title,
+      type: current.type,
+      kind: current.kind,
+      status: current.status,
+      parent_id: current.parent_id,
+      children_deleted: current.children.length,
+      description: eventDescription(args),
+    }, args.actor || "agent");
+    db.prepare("DELETE FROM ticket_revisions WHERE ticket_id = ?").run(current.id);
+    db.prepare("DELETE FROM ticket_commits WHERE ticket_id = ?").run(current.id);
+    db.prepare("DELETE FROM tickets WHERE id = ?").run(current.id);
+    deleted.push(summarizeTicket(current));
+  };
+  // Events stay as the audit trail for deleted tickets, so bypass the cascade FK only for this removal.
+  db.exec("PRAGMA foreign_keys = OFF");
+  try {
+    remove(ticket);
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+  return { deleted: true, ticket_id: ticket.id, deleted_tickets: deleted };
 }
 
 function updateTicket(db, id, args) {
@@ -490,6 +697,7 @@ function updateTicket(db, id, args) {
     if (args[key] !== undefined) fields[key] = key.endsWith("snapshot") || ["raw_requirement", "action_items", "user_comments", "open_questions"].includes(key) ? readValue(args[key]) : args[key];
   }
   if (args.progress_percent !== undefined) fields.progress_percent = normalizeProgress(args.progress_percent);
+  if (args.kind !== undefined) fields.kind = normalizeKind(args.kind);
   const nextType = args.type !== undefined ? normalizeType(args.type) : ticket.type;
   if (args.type !== undefined) fields.type = nextType;
   if (args.parent_id !== undefined) fields.parent_id = validateParent(db, normalizeParentId(args.parent_id), nextType, id);
@@ -688,23 +896,66 @@ function ticketEvents(db, id) {
     .map((event) => ({ ...event, payload: JSON.parse(event.payload || "{}") }));
 }
 
-function listActivity(db, limit = 200) {
-  return db.prepare(`
-    SELECT
-      ticket_events.id,
-      ticket_events.ticket_id,
-      ticket_events.type,
-      ticket_events.actor,
-      ticket_events.payload,
-      ticket_events.created_at,
-      tickets.title AS ticket_title,
-      tickets.type AS ticket_type,
-      tickets.status AS ticket_status
-    FROM ticket_events
-    LEFT JOIN tickets ON tickets.id = ticket_events.ticket_id
-    ORDER BY ticket_events.id DESC
-    LIMIT ?
-  `).all(Number(limit)).map((event) => ({ ...event, payload: JSON.parse(event.payload || "{}") }));
+const ACTIVITY_SELECT = `
+  SELECT
+    ticket_events.id,
+    ticket_events.ticket_id,
+    ticket_events.type,
+    ticket_events.actor,
+    ticket_events.payload,
+    ticket_events.created_at,
+    tickets.id AS existing_ticket_id,
+    tickets.title AS ticket_title,
+    tickets.type AS ticket_type,
+    tickets.kind AS ticket_kind,
+    tickets.status AS ticket_status
+  FROM ticket_events
+  LEFT JOIN tickets ON tickets.id = ticket_events.ticket_id
+`;
+
+function activityEvent(row) {
+  const payload = JSON.parse(row.payload || "{}");
+  const exists = row.existing_ticket_id !== null && row.existing_ticket_id !== undefined;
+  return {
+    id: row.id,
+    ticket_id: row.ticket_id,
+    type: row.type,
+    actor: row.actor,
+    payload,
+    created_at: row.created_at,
+    ticket_exists: exists,
+    ticket_title: exists ? row.ticket_title : (typeof payload.title === "string" ? payload.title : null),
+    ticket_type: exists ? row.ticket_type : (typeof payload.type === "string" ? payload.type : null),
+    ticket_kind: exists ? row.ticket_kind : (typeof payload.kind === "string" ? payload.kind : null),
+    ticket_status: exists ? row.ticket_status : (typeof payload.status === "string" ? payload.status : null),
+  };
+}
+
+function normalizeCursor(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const cursor = Number(value);
+  if (!Number.isInteger(cursor) || cursor <= 0) fail(`invalid cursor: ${value}`);
+  return cursor;
+}
+
+function listActivity(db, args = {}) {
+  const limit = normalizeLimit(args.limit, 50, 200);
+  const before = normalizeCursor(args.before);
+  const rows = db.prepare(`${ACTIVITY_SELECT} WHERE (? IS NULL OR ticket_events.id < ?) ORDER BY ticket_events.id DESC LIMIT ?`)
+    .all(before, before, limit + 1);
+  const hasMore = rows.length > limit;
+  const events = rows.slice(0, limit).map(activityEvent);
+  return {
+    events,
+    has_more: hasMore,
+    next_cursor: hasMore ? events[events.length - 1].id : null,
+  };
+}
+
+function activityAfter(db, afterId, limit = 200) {
+  return db.prepare(`${ACTIVITY_SELECT} WHERE ticket_events.id > ? ORDER BY ticket_events.id ASC LIMIT ?`)
+    .all(Number(afterId), limit)
+    .map(activityEvent);
 }
 
 function seedTickets(db) {
@@ -844,6 +1095,18 @@ function repairSampleHierarchy(db) {
   }
 }
 
+function printTicketLines(items) {
+  for (const item of items) {
+    const ticket = item.ticket || item;
+    const prefix = item.ticket ? `score=${item.score} ` : "";
+    const matched = item.matched_fields?.length ? ` matched=${item.matched_fields.join(",")}` : "";
+    const parent = item.parent ? ` parent=#${item.parent.id}` : "";
+    const via = item.related_children?.length ? ` via=${item.related_children.map((child) => `#${child.ticket_id}`).join(",")}` : "";
+    const kind = ticket.kind ? `:${ticket.kind}` : "";
+    console.log(`${prefix}#${ticket.id} [${ticket.type || "US"}${kind}:${ticket.status}] ${ticket.title} reviewed=${ticket.user_reviewed}${parent}${matched}${via}`);
+  }
+}
+
 function print(value, jsonOutput, quiet = false) {
   if (quiet) return;
   if (jsonOutput) {
@@ -851,16 +1114,40 @@ function print(value, jsonOutput, quiet = false) {
     return;
   }
   if (Array.isArray(value)) {
-    for (const item of value) {
-      const ticket = item.ticket || item;
-      const prefix = item.ticket ? `score=${item.score} ` : "";
-      const matched = item.matched_fields?.length ? ` matched=${item.matched_fields.join(",")}` : "";
-      const parent = item.parent ? ` parent=#${item.parent.id}` : "";
-      console.log(`${prefix}#${ticket.id} [${ticket.type || "US"}:${ticket.status}] ${ticket.title} reviewed=${ticket.user_reviewed}${parent}${matched}`);
+    printTicketLines(value);
+    return;
+  }
+  if (value && Array.isArray(value.results)) {
+    const detection = value.kind_detection;
+    console.log(`kind: ${detection?.kind || "unknown"} (${detection?.confidence || "none"})`);
+    if (value.parent_suggestion) {
+      const suggestion = value.parent_suggestion;
+      console.log(`suggested parent: #${suggestion.ticket_id} [${suggestion.type}] ${suggestion.title} (${suggestion.confidence}) - ${suggestion.reason}`);
+    } else if (value.parent_for) {
+      console.log("suggested parent: none");
+    }
+    printTicketLines(value.results);
+    return;
+  }
+  if (value && Array.isArray(value.events) && "has_more" in value) {
+    for (const event of value.events) {
+      console.log(`#${event.id} ${event.created_at} ${event.type} ticket=${event.ticket_id}${event.ticket_exists ? "" : " (deleted)"} actor=${event.actor}`);
+    }
+    if (value.has_more) console.log(`more: --before ${value.next_cursor}`);
+    return;
+  }
+  if (value && value.deleted) {
+    for (const ticket of value.deleted_tickets) {
+      console.log(`deleted #${ticket.id} [${ticket.type}:${ticket.status}] ${ticket.title}`);
     }
     return;
   }
-  console.log(`#${value.id} [${value.type || "US"}:${value.status}] ${value.title}`);
+  if (value && "kind" in value && "confidence" in value) {
+    console.log(`kind: ${value.kind || "unknown"} (${value.confidence})`);
+    if (value.evidence?.length) console.log(`evidence: ${value.evidence.join(", ")}`);
+    return;
+  }
+  console.log(`#${value.id} [${value.type || "US"}${value.kind ? `:${value.kind}` : ""}:${value.status}] ${value.title}`);
   console.log(`reviewed: ${value.user_reviewed}`);
   console.log(`branch: ${value.branch || ""}`);
   console.log("");
@@ -892,16 +1179,20 @@ async function handleApi(req, res, db, notify = () => {}) {
   const url = new URL(req.url, "http://local");
   try {
     if (req.method === "GET" && url.pathname === "/api/tickets") {
-      return send(res, 200, { statuses: STATUSES, types: TICKET_TYPES, tickets: listTickets(db) }, { "content-type": "application/json" });
+      return send(res, 200, { statuses: STATUSES, types: TICKET_TYPES, kinds: KINDS, tickets: listTickets(db) }, { "content-type": "application/json" });
     }
     if (req.method === "GET" && url.pathname === "/api/activity") {
-      const limit = Number(url.searchParams.get("limit") || 200);
-      return send(res, 200, { events: listActivity(db, limit) }, { "content-type": "application/json" });
+      return send(res, 200, listActivity(db, { limit: url.searchParams.get("limit"), before: url.searchParams.get("before") }), { "content-type": "application/json" });
+    }
+    if (req.method === "GET" && url.pathname === "/api/search") {
+      const query = url.searchParams.get("q") || "";
+      const result = smartSearch(db, { _: ["smart-search", query], type: url.searchParams.get("type") || undefined, kind: url.searchParams.get("kind") || undefined, status: url.searchParams.get("status") || undefined, parent_for: url.searchParams.get("parent_for") || undefined, limit: url.searchParams.get("limit") || undefined });
+      return send(res, 200, result, { "content-type": "application/json" });
     }
     if (req.method === "POST" && url.pathname === "/api/tickets") {
       const body = await readBody(req);
-      const result = createTicket(db, body);
-      notify(result);
+      const result = createTicket(db, { ...body, actor: body.actor || "user" });
+      notify();
       return send(res, 201, result, { "content-type": "application/json" });
     }
     const match = url.pathname.match(/^\/api\/tickets\/(\d+)(?:\/([a-z-]+))?$/);
@@ -911,12 +1202,18 @@ async function handleApi(req, res, db, notify = () => {}) {
     if (req.method === "GET" && !action) {
       return send(res, 200, requireTicket(db, id), { "content-type": "application/json" });
     }
+    if (req.method === "DELETE" && !action) {
+      const result = deleteTicket(db, id, { cascade: url.searchParams.get("cascade") === "true", actor: "user" });
+      notify();
+      return send(res, 200, result, { "content-type": "application/json" });
+    }
     if (req.method !== "POST") {
       return send(res, 405, { error: "method not allowed" }, { "content-type": "application/json" });
     }
     const body = await readBody(req);
     let result;
-    if (action === "approve") result = approve(db, id, body.actor || "user", body);
+    if (action === "delete") result = deleteTicket(db, id, { ...body, actor: body.actor || "user" });
+    else if (action === "approve") result = approve(db, id, body.actor || "user", body);
     else if (action === "start") result = start(db, id, body);
     else if (action === "hold") result = transition(db, id, "hold", "ticket.status_changed", body);
     else if (action === "comment") result = commentTicket(db, id, body);
@@ -932,7 +1229,7 @@ async function handleApi(req, res, db, notify = () => {}) {
     else if (action === "pipeline") result = updatePipeline(db, id, body);
     else if (action === "action-log") result = actionLog(db, id, body);
     else return send(res, 404, { error: "unknown action" }, { "content-type": "application/json" });
-    notify(result);
+    notify();
     return send(res, 200, result, { "content-type": "application/json" });
   } catch (error) {
     return send(res, 400, { error: error.message }, { "content-type": "application/json" });
@@ -957,13 +1254,17 @@ function serve(args) {
   const assets = resolve(skillRoot, "assets");
   const dist = join(assets, "dist");
   const indexPath = join(dist, "index.html");
-  let lastApiEmitAt = 0;
+  let lastEventId = Number(db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM ticket_events").get().id);
+  // Every mutation (API or CLI) records ticket events, so the event tail is the single notification source.
+  const emitNewEvents = (source) => {
+    for (const event of activityAfter(db, lastEventId)) {
+      lastEventId = event.id;
+      io.emit("tickets:changed", { ...event, source, updated_at: event.created_at });
+    }
+  };
   const server = createServer((req, res) => {
     const url = new URL(req.url, "http://local");
-    if (url.pathname.startsWith("/api/")) return handleApi(req, res, db, (ticket) => {
-      lastApiEmitAt = Date.now();
-      io.emit("tickets:changed", { ticket_id: ticket.id, status: ticket.status, updated_at: ticket.updated_at });
-    });
+    if (url.pathname.startsWith("/api/")) return handleApi(req, res, db, () => emitNewEvents("api"));
     if (
       url.pathname === "/" ||
       url.pathname === "/index.html" ||
@@ -994,8 +1295,7 @@ function serve(args) {
   });
   watchFile(databasePath, { interval: 500 }, (current, previous) => {
     if (current.mtimeMs === previous.mtimeMs) return;
-    if (Date.now() - lastApiEmitAt < 700) return;
-    io.emit("tickets:changed", { source: "sqlite", updated_at: now() });
+    emitNewEvents("sqlite");
   });
   server.on("close", () => {
     unwatchFile(databasePath);
@@ -1014,9 +1314,12 @@ function main() {
   const db = openDb();
   if (command === "list") return print(listTickets(db), args.json, args.quiet);
   if (command === "smart-search") return print(smartSearch(db, args), args.json, args.quiet);
+  if (command === "detect-kind") return print(detectKind({ title: readValue(args.query || id || "") }), args.json, args.quiet);
   if (command === "get") return print(requireTicket(db, id), args.json, args.quiet);
   if (command === "create") return print(createTicket(db, args), args.json, args.quiet);
   if (command === "update") return print(updateTicket(db, id, args), args.json, args.quiet);
+  if (command === "delete") return print(deleteTicket(db, id, args), args.json, args.quiet);
+  if (command === "activity") return print(listActivity(db, args), args.json, args.quiet);
   if (command === "approve") return print(approve(db, id, args.actor || "user", args), args.json, args.quiet);
   if (command === "comment") return print(commentTicket(db, id, args), args.json, args.quiet);
   if (command === "questions") return print(setOpenQuestions(db, id, args), args.json, args.quiet);

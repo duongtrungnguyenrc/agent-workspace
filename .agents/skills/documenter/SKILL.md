@@ -38,7 +38,7 @@ US
 
 Distinguish source tickets from agent work tickets. If the user provides Jira, external Kanban, Linear, GitHub Issue, or other human-managed ticket references, use the source-specific skill or tool supplied by the user to fetch/explore them first. Store the discovered source system, id, URL, and snapshot directly on the Vibe Kanban work ticket fields. Do not create a separate Vibe Kanban ticket solely to mirror the external source ticket.
 
-Not every request needs a `US -> use_case` hierarchy. Use `US/use_case` for product stories and user-facing capabilities. If the user is organizing UAT feedback, QC feedback, technical maintenance, or standalone source-ticket-driven work, ask before forcing it into a user story. Use top-level `task`, `uat_feedback`, or `qc_feedback` tickets when that better represents the user's source material.
+Not every request needs a `US -> use_case` hierarchy. Use `US/use_case` for product stories and user-facing capabilities. If the user is organizing UAT feedback, QC feedback, technical maintenance, or standalone source-ticket-driven work, ask before forcing it into a user story. Use top-level `task`, `uat_feedback`, or `qc_feedback` tickets when that better represents the user's source material. Before recording a task-shaped item as top-level, run `smart-search "<title>" --parent-for task --json` and confirm the suggested parent and detected `kind` with the user, as described in the Vibe Kanban skill under "Task Kind And Parent Linking".
 
 ## Analysis Checkpoints
 

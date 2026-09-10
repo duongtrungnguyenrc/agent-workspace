@@ -42,6 +42,17 @@ A single `US` may have many `use_case` children. Split use cases by distinct act
 
 Not every work ticket needs the full `US -> use_case -> task` hierarchy. A `task` may be top-level when the work is standalone or source-ticket driven. If a plausible parent exists, ask the user before linking or reorganizing it. For non-US human feedback streams, use `uat_feedback` or `qc_feedback` as optional grouping tickets at the same planning level as use cases, then place implementation tasks under them when useful.
 
+## Task Kind And Parent Linking
+
+Every `task` carries a `kind`: `feature`, `bugfix`, `refactor`, `chore`, `docs`, or `test`. The kind selects the Git branch prefix (`feat/`, `fix/`, `refactor/`, `chore/`, `docs/`, `test/`) and lets the board filter and group implementation work. `create --type task` detects the kind from the title, raw requirement, specification, and source snapshot when `--kind` is omitted and records `kind_source = detected` with its confidence in the `ticket.created` event. Pass `--kind` explicitly when the user states the intent or when `detect-kind` reports less than `high` confidence.
+
+When the user asks for a free-form task (no ticket id and no explicit parent), do not create a top-level task by default. Find the feature it belongs to first:
+
+1. Run `smart-search "<title or key phrases>" --parent-for task --json`. The result includes `kind_detection`, `parent_suggestion` (with `confidence`, `reason`, and up to three `candidates`), and ranked `results` with parent and child summaries. Search source ids, feature names, user-facing labels, and screen names, not only the literal task title.
+2. Prefer a matching `use_case` over its `US`; the ranking already favors use cases for tasks. Use `uat_feedback` or `qc_feedback` when the request is clearly feedback-driven.
+3. Confirm with the user before creating. Ask one concise question that names the proposed kind and parent, for example: "Create task `Fix greeting for first enabled To recipient` as `bugfix` under VK-5 `Preview Email Recipients`?" When `parent_suggestion.confidence` is `high`, propose that link as the default answer; when it is `medium` or `low`, or there is no suggestion, list the candidate ticket ids and offer a top-level task as one option. Skip the question only when the user already named the parent or explicitly asked for a standalone task.
+4. Create with `--kind <kind> --parent-id <id>`. Omit `--parent-id` only after the user accepts a standalone task, and note detected or assumed values in the ticket `specification` when they matter.
+
 The agent may prepare a ticket freely: inspect requirements, inspect the codebase, use CodeGraph or other source exploration tools, rewrite the implementation specification, and create or revise the execution plan. The agent must not modify implementation code for a task until the current execution plan has been explicitly reviewed and approved by the user.
 
 If the execution plan changes after approval, invalidate the approval and request user review again before implementation continues.
@@ -69,11 +80,16 @@ For ordinary operation, use [scripts/vibe-kanban.mjs](scripts/vibe-kanban.mjs) f
 ```bash
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs list
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs smart-search "<query>" --parent-for task --json
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs smart-search "<query>" --type task --kind bugfix --status open --json
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs detect-kind "<task title or request>" --json
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs seed
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type US --title "<story>"
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type use_case --parent-id <story-ticket-id> --title "<use case>"
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type task --title "<task>" # top-level task is allowed when standalone or source-ticket driven
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type task --parent-id <use-case-or-feedback-id> --title "<task>"
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type task --kind <feature|bugfix|refactor|chore|docs|test> --parent-id <use-case-or-feedback-id> --title "<task>"
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs create --type task --title "<task>" # top-level only after the user accepts a standalone task; kind is auto-detected when --kind is omitted
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs update <ticket-id> --kind bugfix --parent-id <id> --quiet
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs delete <ticket-id> --description "<why>" --quiet # add --cascade to delete a subtree
+node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs activity --limit 50 --json # add --before <event-id> for older pages
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs get <ticket-id> --json
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs comment <task-ticket-id> --comment "<user feedback>" --actor user --quiet
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs questions <ticket-id> --questions "<markdown questions>" --description "Blocked pending user clarification" --quiet
@@ -86,11 +102,13 @@ node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs action-log <task-ticket-
 node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs serve --port 8765
 ```
 
-Use `smart-search` before asking the user to identify related tickets or parents. It searches ticket titles, source fields, raw requirements, specifications, execution plans, source snapshots, action items, and branches, then returns ranked matches with parent and child summaries. Use `--parent-for task` when looking for a valid parent for an implementation task; use `--type`, `--status`, and `--limit` to narrow results. If one parent is clearly correct from the ranked evidence, link to it; if several plausible parents remain, ask the user with the candidate ticket IDs.
+Use `smart-search` before asking the user to identify related tickets or parents. It searches ticket titles, source fields, raw requirements, specifications, execution plans, source snapshots, action items, and branches, then returns ranked matches with parent and child summaries, a `kind_detection` for the query, and, with `--parent-for`, a `parent_suggestion` with `confidence` and candidate ids. Use `--parent-for task` when looking for a valid parent for an implementation task; use `--type`, `--kind`, `--status`, and `--limit` to narrow results. Ticket ids and `VK-<id>` codes match directly. Follow the confirmation rule in "Task Kind And Parent Linking" before linking.
+
+`delete` removes a ticket together with its revisions and commits. It refuses when child tickets exist unless `--cascade` is passed, and it records a `ticket.deleted` event with a title, type, kind, and status snapshot before removal, so the activity log keeps the audit trail for deleted tickets. Ask the user before deleting tickets the agent did not create in the current conversation.
 
 The Node script uses SQLite via `node:sqlite` and stores its database at `.vibe-kanban/vibe-kanban.sqlite` by default. Override that with `VIBE_KANBAN_DB` when needed.
 
-The UI is a React 19 + Vite + Tailwind CSS app under `ui/` and builds to `assets/dist/`. It includes default Kanban, folder-tree List, and draggable Graph tabs sharing the same board filters, plus activity logs and ticket detail pages. The Graph tab visualizes `US -> use_case[] -> task[]` ticket hierarchy with a horizontal SVG mindmap whose pan and zoom stay inside the graph viewport. Ticket detail pages should be read-focused by default: hide the edit form until the user chooses Edit, change status from a status select near the top of the page, and show or edit implementation execution plans only for `task` tickets. Keep UI styling in Tailwind utility classes and do not add handwritten CSS beyond the Tailwind entry import:
+The UI is a React 19 + Vite + Tailwind CSS app under `ui/` and builds to `assets/dist/`. It includes default Kanban, folder-tree List, and draggable Graph tabs sharing the same board filters (type, kind, status, review, and grouping), plus activity logs and ticket detail pages. The Graph tab visualizes `US -> use_case[] -> task[]` ticket hierarchy with a horizontal SVG mindmap whose pan and zoom stay inside the graph viewport. Ticket detail pages should be read-focused by default: hide the edit form until the user chooses Edit, change status from a status select near the top of the page, show or edit implementation execution plans only for `task` tickets, and expose a confirmed Delete action. The activity page loads 50 events per page and fetches older pages with infinite scroll through `GET /api/activity?limit=<n>&before=<event-id>`. Keep UI styling in Tailwind utility classes and do not add handwritten CSS beyond the Tailwind entry import:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -98,7 +116,7 @@ pnpm --filter vibe-kanban run check
 pnpm --filter vibe-kanban run build
 ```
 
-The local server serves the built Vite UI and uses Socket.IO to push ticket changes to connected browsers. Activity logs are server-managed from ticket events and are visible at `/activity`; agents should update tickets normally and do not need separate activity-log commands. Do not use Python for the Vibe Kanban implementation.
+The local server serves the built Vite UI and uses Socket.IO to push ticket changes to connected browsers. Every mutation, whether it comes from the HTTP API or from the CLI writing to SQLite, records a ticket event, and the server emits one `tickets:changed` message per new event carrying the event type, actor, payload, ticket code, title, type, kind, status, and whether the ticket still exists. The UI turns those into clickable notifications, so agents should always pass `--description` on status and progress commands to make the pushed notification meaningful. Activity logs are server-managed from ticket events and are visible at `/activity`; agents should update tickets normally and do not need separate activity-log commands. Do not use Python for the Vibe Kanban implementation.
 
 Ticket detail pages include a user review comment form for pending task approval. User comments are stored in `user_comments` and activity history so the agent can revise the task or execution plan before asking for approval again.
 

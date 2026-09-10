@@ -1,5 +1,5 @@
-import { formatStatus, formatType } from "../lib/format";
-import { badgeToneClass, panelClass, statusTone, ticketCodeClass, typeTone } from "../lib/styles";
+import { formatKind, formatStatus, formatType } from "../lib/format";
+import { badgeToneClass, kindTone, panelClass, statusTone, ticketCodeClass, typeTone } from "../lib/styles";
 import { projectTree, type TicketTreeNode } from "../lib/tree";
 import type { TicketListItem } from "../types/kanban";
 import { Badge } from "./Badge";
@@ -48,6 +48,7 @@ function renderTreeNode(node: TicketTreeNode, depth: number, visibleIds: Set<num
   const hasTicket = Boolean(node.ticket);
   const status = hasTicket ? node.ticket?.status : null;
   const type = hasTicket ? node.ticket?.type : null;
+  const kind = hasTicket ? node.ticket?.kind : null;
   const isMatch = !node.ticket || visibleIds.has(node.ticket.id);
   const children = node.children || [];
   const tone = toneFor(node);
@@ -60,6 +61,7 @@ function renderTreeNode(node: TicketTreeNode, depth: number, visibleIds: Set<num
       </button>
       <div className="flex flex-wrap gap-1 max-lg:pl-9">
         {type ? <Badge tone={typeTone[type]}>{formatType(type)}</Badge> : <Badge tone={tone}>{node.typeLabel}</Badge>}
+        {kind ? <Badge tone={kindTone[kind]}>{formatKind(kind)}</Badge> : null}
         {status ? <Badge tone={statusTone[status]}>{formatStatus(status)}</Badge> : <Badge tone="violet">{node.statusLabel}</Badge>}
         {hasTicket ? <Badge tone={node.reviewed ? "emerald" : "orange"}>{node.reviewed ? "Approved" : "Needs review"}</Badge> : null}
       </div>

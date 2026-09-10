@@ -1,4 +1,13 @@
-import type { TicketStatus, TicketType } from "../types/kanban";
+import type { TicketKind, TicketStatus, TicketType } from "../types/kanban";
+
+export const kindTone: Record<TicketKind, string> = {
+  feature: "emerald",
+  bugfix: "rose",
+  refactor: "sky",
+  chore: "amber",
+  docs: "indigo",
+  test: "fuchsia",
+};
 
 export const statusTone: Record<TicketStatus, string> = {
   open: "sky",

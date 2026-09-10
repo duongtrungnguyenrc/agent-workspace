@@ -1,13 +1,15 @@
 export type TicketStatus = "open" | "in_progress" | "hold" | "cancelled" | "in_review" | "closed";
 export type TicketType = "US" | "use_case" | "task" | "uat_feedback" | "qc_feedback";
+export type TicketKind = "feature" | "bugfix" | "refactor" | "chore" | "docs" | "test";
 export type ReviewFilter = "" | "approved" | "pending";
-export type GroupBy = "status" | "type" | "review" | "branch" | "parent";
+export type GroupBy = "status" | "type" | "kind" | "review" | "branch" | "parent";
 
 export interface TicketListItem {
   id: number;
   parent_id: number | null;
   title: string;
   type: TicketType;
+  kind: TicketKind | null;
   status: TicketStatus;
   user_reviewed: boolean;
   progress_percent: number | null;
@@ -32,6 +34,8 @@ export interface TicketListItem {
   created_at: string;
   updated_at: string;
 }
+
+export type TicketSummary = Pick<TicketListItem, "id" | "parent_id" | "title" | "type" | "kind" | "status" | "user_reviewed">;
 
 export interface TicketRevision {
   id: number;
@@ -62,25 +66,33 @@ export interface TicketEvent {
 }
 
 export interface ActivityEvent extends TicketEvent {
+  ticket_exists: boolean;
   ticket_title: string | null;
   ticket_type: TicketType | null;
+  ticket_kind: TicketKind | null;
   ticket_status: TicketStatus | null;
 }
 
 export interface ActivityCollection {
   events: ActivityEvent[];
+  has_more: boolean;
+  next_cursor: number | null;
 }
 
-export interface TicketChangeEvent {
-  ticket_id?: number;
-  status?: TicketStatus;
+export interface TicketChangeEvent extends ActivityEvent {
+  source: "api" | "sqlite";
   updated_at: string;
-  source?: "api" | "sqlite";
+}
+
+export interface DeleteResult {
+  deleted: true;
+  ticket_id: number;
+  deleted_tickets: TicketSummary[];
 }
 
 export interface TicketDetail extends TicketListItem {
-  parent: Pick<TicketListItem, "id" | "parent_id" | "title" | "type" | "status" | "user_reviewed"> | null;
-  children: Array<Pick<TicketListItem, "id" | "parent_id" | "title" | "type" | "status" | "user_reviewed">>;
+  parent: TicketSummary | null;
+  children: TicketSummary[];
   revisions: TicketRevision[];
   commits: TicketCommit[];
   events: TicketEvent[];
@@ -89,5 +101,6 @@ export interface TicketDetail extends TicketListItem {
 export interface TicketCollection {
   statuses: TicketStatus[];
   types: TicketType[];
+  kinds: TicketKind[];
   tickets: TicketListItem[];
 }

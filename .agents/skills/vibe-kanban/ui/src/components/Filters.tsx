@@ -1,16 +1,20 @@
-import type { GroupBy, ReviewFilter, TicketStatus, TicketType } from "../types/kanban";
+import type { GroupBy, ReviewFilter, TicketKind, TicketStatus, TicketType } from "../types/kanban";
+import { formatKind, formatStatus, formatType } from "../lib/format";
 import { fieldClass, inputClass, panelClass, selectClass } from "../lib/styles";
 
 interface FiltersProps {
   query: string;
   typesSelected: TicketType[];
+  kindsSelected: TicketKind[];
   statusesSelected: TicketStatus[];
   reviewsSelected: ReviewFilter[];
   groupBy: GroupBy;
   types: TicketType[];
+  kinds: TicketKind[];
   statuses: TicketStatus[];
   onQuery: (value: string) => void;
   onTypes: (value: TicketType[]) => void;
+  onKinds: (value: TicketKind[]) => void;
   onStatuses: (value: TicketStatus[]) => void;
   onReviews: (value: ReviewFilter[]) => void;
   onGroupBy: (value: GroupBy) => void;
@@ -60,25 +64,14 @@ function MultiFilter<T extends string>({
 
 export function Filters(props: FiltersProps) {
   return (
-    <section className={`${panelClass} mb-4 grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(220px,1.4fr)_repeat(3,minmax(180px,1fr))_minmax(140px,0.8fr)]`}>
+    <section className={`${panelClass} mb-4 grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(220px,1.4fr)_repeat(4,minmax(150px,1fr))_minmax(140px,0.8fr)]`}>
       <label className={fieldClass}>
         <span>Search</span>
-        <input className={inputClass} value={props.query} onChange={(event) => props.onQuery(event.target.value)} placeholder="Title, spec, plan, branch" />
+        <input className={inputClass} value={props.query} onChange={(event) => props.onQuery(event.target.value)} placeholder="Title, kind, spec, plan, branch" />
       </label>
-      <MultiFilter
-        label="Type"
-        options={props.types}
-        values={props.typesSelected}
-        onChange={props.onTypes}
-        format={(type) => (type === "use_case" ? "Use Case" : type)}
-      />
-      <MultiFilter
-        label="Status"
-        options={props.statuses}
-        values={props.statusesSelected}
-        onChange={props.onStatuses}
-        format={(status) => status.replace("_", " ")}
-      />
+      <MultiFilter label="Type" options={props.types} values={props.typesSelected} onChange={props.onTypes} format={formatType} />
+      <MultiFilter label="Kind" options={props.kinds} values={props.kindsSelected} onChange={props.onKinds} format={formatKind} />
+      <MultiFilter label="Status" options={props.statuses} values={props.statusesSelected} onChange={props.onStatuses} format={formatStatus} />
       <MultiFilter
         label="Review"
         options={["approved", "pending"] as ReviewFilter[]}
@@ -91,6 +84,7 @@ export function Filters(props: FiltersProps) {
         <select className={selectClass} value={props.groupBy} onChange={(event) => props.onGroupBy(event.target.value as GroupBy)}>
           <option value="status">Status</option>
           <option value="type">Type</option>
+          <option value="kind">Kind</option>
           <option value="review">Review</option>
           <option value="branch">Branch</option>
           <option value="parent">Parent</option>

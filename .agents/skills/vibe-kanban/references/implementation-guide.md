@@ -51,6 +51,25 @@ qc_feedback
 
 `US` is for user-story-shaped product requirements. `use_case` is for scenario or workflow coverage. `task` is for implementation or maintenance work. `uat_feedback` and `qc_feedback` are lightweight grouping tickets for human feedback streams that are not naturally user stories.
 
+### Task Kind
+
+Tickets also carry an optional `kind` that classifies the work intent, primarily for `task` tickets:
+
+```text
+feature
+bugfix
+refactor
+chore
+docs
+test
+```
+
+`kind` maps one-to-one to the Git branch prefix (`feat/`, `fix/`, `refactor/`, `chore/`, `docs/`, `test/`) and is a board filter and grouping. When a task is created without an explicit kind, the CLI and API detect it from weighted keyword signals in the title (double weight), raw requirement, specification, and source snapshot, and store the result together with `kind_source` and `kind_confidence` in the `ticket.created` event payload. Keep the detection heuristic small and transparent; the agent confirms low-confidence results with the user rather than adding more machinery.
+
+### Free-Form Task Intake
+
+A task requested without a ticket id or parent should be linked to the feature it belongs to. `smart-search --parent-for task` returns `kind_detection`, a `parent_suggestion` with `confidence` (`high`, `medium`, `low`) and up to three candidates, and ranked results. Ranking prefers `use_case` parents for tasks, adds a bonus when every query token appears in the title, and halves cancelled tickets. The agent presents the proposed kind and parent to the user for confirmation before creating the task; a top-level task is created only after the user accepts it.
+
 Use parent-child links for product-doc workflows:
 
 ```text
@@ -194,12 +213,22 @@ author
 created_at
 ```
 
+## Ticket Removal
+
+Support explicit ticket deletion from the CLI (`delete <id> [--cascade]`), the API (`POST /api/tickets/:id/delete` with `{ cascade }` or `DELETE /api/tickets/:id?cascade=true`), and the ticket detail page behind a confirmation dialog.
+
+- Refuse to delete a ticket that still has child tickets unless cascade is requested; cascade removes the whole subtree, children first.
+- Before removing each ticket, record a `ticket.deleted` event whose payload snapshots `title`, `type`, `kind`, `status`, `parent_id`, `children_deleted`, and the optional description.
+- Delete the ticket row plus its revisions and commits, but keep `ticket_events` rows so the activity log remains a complete audit trail. Activity queries left-join `tickets` and expose `ticket_exists`; deleted entries fall back to the snapshot values for title, type, kind, and status.
+
 ## Activity History
 
 Record lightweight events for important ticket actions. Useful event types include:
 
 ```text
 ticket.created
+ticket.deleted
+ticket.updated
 ticket.spec_updated
 ticket.plan_created
 ticket.plan_updated
@@ -229,6 +258,8 @@ payload
 created_at
 ```
 
+The global activity endpoint is cursor-paginated by event id: `GET /api/activity?limit=<1-200>&before=<event-id>` returns `{ events, has_more, next_cursor }` newest first, and the CLI mirrors it with `activity --limit <n> --before <event-id>`. Each activity row joins the current ticket title, type, kind, and status and includes `ticket_exists`.
+
 ## Persistence
 
 Use SQLite as the only datastore. Keep the schema small and inspectable.
@@ -251,13 +282,18 @@ Expose simple commands an agent can use:
 ```bash
 vibe-kanban list
 vibe-kanban smart-search "<query>" --parent-for task --json
+vibe-kanban smart-search "<query>" --type task --kind bugfix --json
+vibe-kanban detect-kind "<text>" --json
 vibe-kanban get <ticket-id>
 vibe-kanban create
 vibe-kanban create --type use_case --parent-id <story-ticket-id>
-vibe-kanban create --type task --parent-id <use-case-ticket-id>
+vibe-kanban create --type task --kind bugfix --parent-id <use-case-ticket-id>
 vibe-kanban create --type task --source-type jira --source-id PROJ-123 --source-snapshot <text>
 vibe-kanban create --type uat_feedback --title <feedback-group>
-vibe-kanban update <ticket-id>
+vibe-kanban update <ticket-id> --kind <kind>
+vibe-kanban delete <ticket-id> --description <text> --quiet
+vibe-kanban delete <ticket-id> --cascade --description <text> --quiet
+vibe-kanban activity --limit 50 --before <event-id> --json
 vibe-kanban approve <ticket-id> --description <text> --quiet
 vibe-kanban comment <ticket-id> --comment <text> --actor user --quiet
 vibe-kanban questions <ticket-id> --questions <text> --description <text> --quiet
@@ -282,7 +318,9 @@ vibe-kanban smart-search "<query>" --json
 
 JSON should include enough ticket, specification, plan, approval, status, Git, and event information for an agent to continue work without parsing HTML.
 
-`smart-search` is a read-only agent discovery command. It should rank tickets by matches across title, source fields, raw requirement, specification, execution plan, source snapshot, action items, and branch. Results should include the matched ticket summary plus parent and child summaries so agents can find related context without needing multiple follow-up reads. Support `--parent-for <type>` to return only tickets that are valid parents for that ticket type, such as `--parent-for task` when the agent is deciding where to link an implementation task. Also support `--type`, `--status`, and `--limit` for focused lookup.
+`smart-search` is a read-only agent discovery command. It should rank tickets by matches across title, source fields, raw requirement, specification, execution plan, source snapshot, action items, and branch. Results should include the matched ticket summary plus parent and child summaries so agents can find related context without needing multiple follow-up reads. The JSON output is an object: `{ query, kind_detection, parent_for, parent_suggestion, results }`. Support `--parent-for <type>` to return only tickets that are valid parents for that ticket type and to populate `parent_suggestion`, such as `--parent-for task` when the agent is deciding where to link an implementation task. Also support `--type`, `--kind`, `--status`, and `--limit` for focused lookup. The same search is available to the UI as `GET /api/search?q=<text>&parent_for=task`.
+
+`detect-kind` exposes the kind heuristic on its own so an agent can classify a request before creating a ticket.
 
 The `approve` and `start` commands must apply only to `task` tickets. The `start` command must enforce the approval gate: if the current execution plan is not approved, fail with a clear message and leave the ticket unchanged.
 
@@ -295,10 +333,12 @@ Status-changing commands should accept `--description <text|@file>` so agents ca
 The UI should provide:
 
 - Kanban board
-- ticket type badges
-- search across title, type, source, branch, specification, and execution plan
-- simple filters for type, status, and review state
-- grouping by status, type, review state, or branch
+- ticket type and kind badges
+- search across title, type, kind, source, branch, specification, and execution plan
+- simple filters for type, kind, status, and review state
+- grouping by status, type, kind, review state, branch, or parent
+- ticket creation with an optional kind (auto-detected for tasks when left blank)
+- confirmed ticket deletion from the detail page, with cascade when children exist
 - drag-and-drop between any status columns, with server-side target-status validation
 - ticket detail view
 - folder-tree hierarchy List tab for scanning `US -> use_case[] -> task[]` as nested tickets using the same filters as the Kanban board
@@ -312,13 +352,20 @@ The UI should provide:
 - Git trace
 - PR, pipeline, and action trace
 - activity history
-- activity logs page
+- activity logs page with cursor-based infinite scroll (50 events per page, newest first, older pages fetched with `before`)
+- realtime notifications that name the event, ticket code, title, type, kind, actor, and change details, and open the ticket on click
 
-Use Socket.IO for lightweight realtime refresh. Broadcast after ticket mutations:
+Use Socket.IO for lightweight realtime refresh. The server keeps the id of the last emitted event and, after every API mutation and on every SQLite file change (CLI writes), emits one message per new `ticket_events` row:
 
 ```js
-io.emit("tickets:changed", { ticket_id, status, updated_at });
+io.emit("tickets:changed", {
+  id, ticket_id, type, actor, payload, created_at,
+  ticket_exists, ticket_title, ticket_type, ticket_kind, ticket_status,
+  source: "api" | "sqlite",
+});
 ```
+
+Because every mutation writes an event, the event tail is the only notification source; API and CLI changes never double-emit. The UI shows a toast per event, debounces the board refresh, and returns to the board when the currently opened ticket is deleted elsewhere.
 
 The UI may approve task tickets and move tickets through the local API, but supported status validation and approval gating should remain in the server/CLI layer. In ticket detail views, expose status movement through a status select at the top of the page instead of rendering separate status-transition buttons.
 
@@ -342,3 +389,8 @@ When building the tool, verify the meaningful invariants:
 - Git commit records can be associated with a ticket
 - seeded sample tickets cover multiple ticket types and statuses
 - task progress can be updated by agent command and reflected in the UI progress bars
+- a task created without `--kind` receives a detected kind and the created event records the detection source
+- `smart-search --parent-for task` ranks a matching use case above its parent story and returns a parent suggestion with confidence
+- deleting a ticket with children fails without cascade, succeeds with cascade, and keeps `ticket.deleted` events in the activity log
+- the activity endpoint paginates by cursor without gaps or duplicates
+- CLI mutations reach connected browsers as full event notifications without duplicate emissions

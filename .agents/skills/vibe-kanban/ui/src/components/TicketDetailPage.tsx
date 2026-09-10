@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { eventLabel, eventSummary } from "../lib/events";
 import {
+  formatKind,
   formatStatus,
   formatType,
   progressFor,
@@ -11,6 +13,7 @@ import {
   buttonTone,
   fieldClass,
   inputClass,
+  kindTone,
   mutedTextClass,
   panelClass,
   secondaryButtonClass,
@@ -22,6 +25,7 @@ import {
 } from "../lib/styles";
 import type {
   TicketDetail,
+  TicketKind,
   TicketListItem,
   TicketStatus,
   TicketType,
@@ -34,6 +38,7 @@ interface TicketDetailPageProps {
   tickets: TicketListItem[];
   statuses: TicketStatus[];
   types: TicketType[];
+  kinds: TicketKind[];
   onBack: () => void;
   onOpen: (id: number) => void;
   onMove: (id: number, status: TicketStatus) => Promise<void>;
@@ -46,6 +51,7 @@ interface TicketDetailPageProps {
     id: number,
     data: Record<string, FormDataEntryValue | string>,
   ) => Promise<void>;
+  onDelete: (id: number) => Promise<void>;
 }
 
 function eligibleParents(
@@ -90,31 +96,6 @@ function Property({
   );
 }
 
-function eventSummary(payload: Record<string, unknown>) {
-  const description =
-    typeof payload.description === "string" ? payload.description.trim() : "";
-  const step = typeof payload.step === "string" ? payload.step.trim() : "";
-  const percent =
-    typeof payload.percent === "number" ? `${payload.percent}%` : "";
-  const from =
-    typeof payload.from === "string" ? formatStatus(payload.from) : "";
-  const to = typeof payload.to === "string" ? formatStatus(payload.to) : "";
-  const comment =
-    typeof payload.comment === "string" ? payload.comment.trim() : "";
-  const questions =
-    typeof payload.questions === "string" ? payload.questions.trim() : "";
-  return [
-    from && to ? `${from} -> ${to}` : "",
-    step ? `Step: ${step}` : "",
-    percent ? `Progress: ${percent}` : "",
-    comment,
-    questions,
-    description,
-  ]
-    .filter(Boolean)
-    .join(" - ");
-}
-
 function textValue(value: string | null | undefined) {
   return value || "";
 }
@@ -152,11 +133,13 @@ export function TicketDetailPage({
   tickets,
   statuses,
   types,
+  kinds,
   onBack,
   onOpen,
   onMove,
   onAction,
   onSave,
+  onDelete,
 }: TicketDetailPageProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editType, setEditType] = useState<TicketType>(ticket.type);
@@ -196,6 +179,11 @@ export function TicketDetailPage({
             <Badge tone={typeTone[ticket.type]}>
               {formatType(ticket.type)}
             </Badge>
+            {ticket.kind ? (
+              <Badge tone={kindTone[ticket.kind]}>
+                {formatKind(ticket.kind)}
+              </Badge>
+            ) : null}
             <Badge tone={statusTone[ticket.status]}>
               {formatStatus(ticket.status)}
             </Badge>
@@ -249,6 +237,18 @@ export function TicketDetailPage({
             >
               {isEditing ? "Close editor" : "Edit"}
             </button>
+            <button
+              className={`${buttonClass} border-rose-200 bg-white text-rose-700 hover:border-rose-400 hover:bg-rose-50`}
+              title={
+                ticket.children.length
+                  ? "Deletes this ticket and its child tickets"
+                  : "Delete this ticket"
+              }
+              type="button"
+              onClick={() => onDelete(ticket.id)}
+            >
+              Delete
+            </button>
           </div>
         </div>
       </header>
@@ -278,6 +278,10 @@ export function TicketDetailPage({
             </h2>
             <Property label="Code" value={ticketCode(ticket)} />
             <Property label="Type" value={formatType(ticket.type)} />
+            <Property
+              label="Kind"
+              value={ticket.kind ? formatKind(ticket.kind) : null}
+            />
             <Property label="Status" value={formatStatus(ticket.status)} />
             <Property
               label="Review"
@@ -384,7 +388,7 @@ export function TicketDetailPage({
                   Cancel
                 </button>
               </div>
-              <div className="grid gap-3 xl:grid-cols-[1fr_150px_1fr_140px]">
+              <div className="grid gap-3 xl:grid-cols-[1fr_140px_140px_1fr_120px]">
                 <label className={fieldClass}>
                   <span>Title</span>
                   <input
@@ -406,6 +410,21 @@ export function TicketDetailPage({
                     {types.map((item) => (
                       <option key={item} value={item}>
                         {formatType(item)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={fieldClass}>
+                  <span>Kind</span>
+                  <select
+                    className={selectClass}
+                    name="kind"
+                    defaultValue={ticket.kind || ""}
+                  >
+                    <option value="">None</option>
+                    {kinds.map((item) => (
+                      <option key={item} value={item}>
+                        {formatKind(item)}
                       </option>
                     ))}
                   </select>
@@ -716,15 +735,15 @@ export function TicketDetailPage({
                     >
                       <span className="mt-2 size-2 rounded-full bg-violet-600 ring-4 ring-violet-100" />
                       <div className="min-w-0 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
-                        <strong className="block wrap-break-word text-sm font-bold capitalize text-neutral-950">
-                          {event.type.replaceAll(".", " ")}
+                        <strong className="block wrap-break-word text-sm font-bold text-neutral-950">
+                          {eventLabel(event.type)}
                         </strong>
                         <p className="m-0 text-xs font-semibold text-neutral-500">
                           {event.actor} - {event.created_at}
                         </p>
-                        {eventSummary(event.payload) ? (
+                        {eventSummary(event.type, event.payload) ? (
                           <p className="m-0 mt-2 wrap-break-word text-sm leading-6 text-neutral-600">
-                            {eventSummary(event.payload)}
+                            {eventSummary(event.type, event.payload)}
                           </p>
                         ) : null}
                       </div>

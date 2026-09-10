@@ -11,7 +11,7 @@ This spec controls Git and GitHub workflow only. It does not replace the product
 - Before branch changes, inspect the current branch and worktree state with `git status --short --branch`.
 - If unrelated local changes exist, keep them intact. Only ask the user when those changes block checkout, verification, or committing the task.
 - Prefer `develop` as the base branch. If `develop` is missing or the repository clearly uses another integration branch, stop and ask before choosing a different base.
-- Use Husky/conventional-compatible branch prefixes: `feat/`, `fix/`, `chore/`, `refactor/`, `docs/`, or `test/`. Choose the prefix from the work intent.
+- Use Husky/conventional-compatible branch prefixes: `feat/`, `fix/`, `chore/`, `refactor/`, `docs/`, or `test/`. Take the prefix from the Vibe Kanban task `kind` (`feature -> feat/`, `bugfix -> fix/`, `refactor -> refactor/`, `chore -> chore/`, `docs -> docs/`, `test -> test/`); set the kind on the ticket first when it is missing.
 - For Vibe Kanban tasks without an external source ticket, use `<prefix>/vk-<task-ticket-id>-<short-title>`.
 - For Vibe Kanban tasks created from an external source ticket, use `<prefix>/<source-ticket-id>-vk-<task-ticket-id>-<short-title>`, for example `fix/JIRA-123-vk-42-login-timeout`. If multiple source tickets exist, use the primary source ticket id and include the rest in the PR body and Vibe Kanban source snapshot.
 - Commit only files that belong to the task. Avoid broad `git add .` unless the task intentionally changed all visible files.

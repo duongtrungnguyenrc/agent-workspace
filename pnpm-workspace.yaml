@@ -1,5 +1,5 @@
 packages:
-  - .agents/skills/vibe-kanban
+  - vibe-kanban
 
 allowBuilds:
   esbuild: true

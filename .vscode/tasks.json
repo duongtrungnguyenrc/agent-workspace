@@ -14,10 +14,9 @@
     {
       "label": "Start Vibe Kanban UI",
       "type": "shell",
-      "command": "node",
+      "command": "pnpm",
       "args": [
-        "${workspaceFolder}/.agents/skills/vibe-kanban/scripts/vibe-kanban.mjs",
-        "serve"
+        "vk:serve"
       ],
       "isBackground": true,
       "runOptions": {

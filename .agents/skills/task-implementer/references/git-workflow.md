@@ -28,15 +28,15 @@ git checkout develop
 git pull --ff-only
 git rev-parse HEAD
 git checkout -b <prefix>/vk-<task-ticket-id>-<short-title>
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs update <task-ticket-id> --branch "<prefix>/vk-<task-ticket-id>-<short-title>" --base-commit <develop-head> --quiet
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress-log <task-ticket-id> --step "Checkout branch" --description "Created implementation branch from develop" --percent 5 --quiet
+pnpm -s vk update <task-ticket-id> --branch "<prefix>/vk-<task-ticket-id>-<short-title>" --base-commit <develop-head> --quiet
+pnpm -s vk progress-log <task-ticket-id> --step "Checkout branch" --description "Created implementation branch from develop" --percent 5 --quiet
 ```
 
 When the task has a source ticket, use the source-aware form instead:
 
 ```bash
 git checkout -b <prefix>/<source-ticket-id>-vk-<task-ticket-id>-<short-title>
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs update <task-ticket-id> --branch "<prefix>/<source-ticket-id>-vk-<task-ticket-id>-<short-title>" --base-commit <develop-head> --quiet
+pnpm -s vk update <task-ticket-id> --branch "<prefix>/<source-ticket-id>-vk-<task-ticket-id>-<short-title>" --base-commit <develop-head> --quiet
 ```
 
 If the branch already exists, inspect it instead of recreating it. Confirm it is based on the expected base or ask the user if rebasing, recreating, or continuing from that branch would be safer.
@@ -67,9 +67,11 @@ git diff -- <relevant-paths>
 git add <relevant-paths>
 git commit -m "<type>: <summary>"
 git rev-parse HEAD
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs add-commit <task-ticket-id> --commit-hash <hash> --branch <branch> --message "<message>" --quiet
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress-log <task-ticket-id> --step "Commit implementation" --description "Recorded commit <hash>" --percent <percent> --quiet
+pnpm -s vk add-commit <task-ticket-id> --commit-hash <hash> --url <commit-url> --branch <branch> --message "<message>" --quiet
+pnpm -s vk progress-log <task-ticket-id> --step "Commit implementation" --description "Recorded commit <hash>" --quiet
 ```
+
+Pass the canonical web URL for each commit when a remote repository is available so ticket detail can navigate directly to it. The UI can derive GitHub/GitLab commit links from the PR URL as a fallback.
 
 If there are no changes after verification, do not create an empty commit unless the user explicitly asked for one.
 
@@ -101,12 +103,11 @@ PR body should include:
 After the PR is created, record the URL, PR status, and any pipeline/action URL you can identify, then move the task to review:
 
 ```bash
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs pr <task-ticket-id> --pr-url <url> --pr-status open --description "PR created" --quiet
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs pipeline <task-ticket-id> --pipeline-status pending --pipeline-url <url> --description "Pipeline started" --quiet
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs action-log <task-ticket-id> --action-type github-actions --status pending --url <url> --description "GitHub Actions started" --quiet
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs review <task-ticket-id> --description "Implementation complete and PR is ready for review" --quiet
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress <task-ticket-id> --percent 90 --note "PR created: <url>" --description "PR opened for review" --quiet
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs progress-log <task-ticket-id> --step "Open PR" --description "Created PR: <url>" --percent 90 --quiet
+pnpm -s vk pr <task-ticket-id> --pr-url <url> --pr-status open --description "PR created" --quiet
+pnpm -s vk pipeline <task-ticket-id> --pipeline-status pending --pipeline-url <url> --description "Pipeline started" --quiet
+pnpm -s vk action-log <task-ticket-id> --action-type github-actions --status pending --url <url> --description "GitHub Actions started" --quiet
+pnpm -s vk review <task-ticket-id> --description "Implementation complete and PR is ready for review" --quiet
+pnpm -s vk progress-log <task-ticket-id> --step "Open PR" --description "Created PR: <url>" --quiet
 ```
 
 If `gh` is not installed, not authenticated, or no GitHub remote exists, stop after commit and provide the exact branch, commit, and command the user can run next.

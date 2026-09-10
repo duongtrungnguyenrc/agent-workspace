@@ -10,7 +10,7 @@ This workspace integrates the following core components:
 - Vibe Kanban for managing tickets, stories, use cases, tasks, and progress
 - CodeGraph for understanding project structure and dependencies
 - AgentMemory for storing project context and memory
-- Auto-US project scanning for bootstrapping a new codebase into group/feature tickets
+- doc-collector project scanning for bootstrapping a new codebase into group/feature tickets
 - Analysis checkpoints that make the agent stop and ask when intent, scope, or risk needs a human decision
 - Setup script to standardize the environment for a new project
 
@@ -85,7 +85,7 @@ the work can continue.
 flowchart TD
     A[User request] --> B{Request type}
 
-    B -->|Bootstrap stories from a new or existing project| AU[auto-us]
+    B -->|Bootstrap stories from a new or existing project| AU[doc-collector]
     AU --> AU1[Confirm setup and CodeGraph index]
     AU1 --> AU2[Scan routes, screens, APIs, jobs, navigation]
     AU2 --> AUQ{Feature map ambiguous?}
@@ -141,7 +141,7 @@ flowchart TD
 2. Run `./scripts/setup.sh` from the workspace root.
 3. Create the project under `source/` or in a separate workspace.
 4. Before analysis or implementation, look for and follow `PROJECTS.md` when it exists in the repository or applicable project directory.
-5. If the project already has code, explicitly run the `auto-us` workflow to scan routes, screens, APIs, jobs, navigation, and permission surfaces with CodeGraph, then create or update Vibe Kanban `group -> feature[]` tickets from the discovered feature clusters.
+5. If the project already has code, explicitly run the `doc-collector` workflow to scan routes, screens, APIs, jobs, navigation, and permission surfaces with CodeGraph, then create or update Vibe Kanban `group -> feature[]` tickets from the discovered feature clusters.
 6. If the project starts from product notes instead of existing code, use `documenter` to create the initial `group -> feature[]` tree directly from those requirements.
 7. For UI-heavy projects, use `design-collector` to extract or refresh `DESIGN.md` before implementation tasks are planned.
 8. Preserve relevant context with AgentMemory and keep Vibe Kanban as the source of truth.
@@ -161,6 +161,7 @@ flowchart TD
 ├── scripts/
 │   └── setup.sh             # AI workspace environment setup
 ├── source/                  # Project source files
+├── vibe-kanban/             # Vibe Kanban core: CLI, local server, React UI, docs
 ├── .agents/                 # Canonical shared agent skills and rules
 ├── .codex/                  # Codex configuration and skills
 ├── .claude/                 # Claude Code configuration and skills
@@ -171,8 +172,8 @@ flowchart TD
 ## Working Rules
 
 - Use Vibe Kanban as the control plane for stories, tasks, and progress.
-- For a new project with existing code, use `auto-us` only when explicitly asked to bootstrap or infer stories from the codebase.
-- Use `documenter` for user-provided product requirements; use `auto-us` for codebase-derived feature maps; use `task-implementer` only when implementation is requested.
+- For a new project with existing code, use `doc-collector` only when explicitly asked to bootstrap or infer stories from the codebase.
+- Use `documenter` for user-provided product requirements; use `doc-collector` for codebase-derived feature maps; use `task-implementer` only when implementation is requested.
 - Do not start coding before the task or execution plan is approved.
 - Stop and ask during analysis when multiple intents, hierarchy choices, UX/data/integration decisions, or risk profiles would lead to different tickets or implementation plans.
 - When creating a new project, always run setup first.
@@ -184,19 +185,24 @@ flowchart TD
 
 Canonical skills live in `.agents/skills/`. The setup script links them into
 `.codex/skills/` and `.claude/skills/` so each agent can discover the same
-workflow. Use the canonical path when running project-local tools directly, for
-example:
+workflow. Run the Vibe Kanban CLI through the root `package.json` script (`vk` wraps
+`node vibe-kanban/scripts/vibe-kanban.mjs`; `-s` keeps pnpm from echoing the
+command so `--quiet` and `--json` output stay clean):
 
 ```bash
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs <command>
+pnpm -s vk <command>
+pnpm vk:serve   # local server
+pnpm vk:dev     # Vite dev server for the UI
+pnpm vk:build   # build UI to assets/dist
+pnpm vk:check   # tsc --noEmit
 ```
 
 Useful discovery commands:
 
 ```bash
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs smart-search "<query>" --parent-for task --json
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs detect-kind "<task request>" --json
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs activity --limit 50 --json
+pnpm -s vk smart-search "<query>" --parent-for task --json
+pnpm -s vk detect-kind "<task request>" --json
+pnpm -s vk activity --limit 50 --json
 ```
 
 Use `smart-search` when an agent needs related Vibe Kanban context, such as finding a likely parent before linking or implementing a task. Its output includes the detected task kind (`feature`, `bugfix`, `refactor`, `chore`, `docs`, `test`) and a parent suggestion with confidence; the agent confirms both with the developer before creating a free-form task. Tickets can be removed with `delete <ticket-id> [--cascade]`; the activity log keeps a `ticket.deleted` audit entry.
@@ -204,11 +210,15 @@ Use `smart-search` when an agent needs related Vibe Kanban context, such as find
 Pending approval and blocked-question commands:
 
 ```bash
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs comment <task-ticket-id> --comment "<user feedback>" --actor user --quiet
-node .agents/skills/vibe-kanban/scripts/vibe-kanban.mjs questions <ticket-id> --questions "<markdown questions>" --description "Blocked pending user clarification" --quiet
+pnpm -s vk comment <task-ticket-id> --comment "<user feedback>" --actor user --quiet
+pnpm -s vk questions <ticket-id> --questions "<markdown questions>" --description "Blocked pending user clarification" --quiet
 ```
 
 User comments let reviewers give feedback before approving a task. Open questions move the ticket to `hold` so unresolved decisions stay visible until a human answers them. If the agent has an available Teams, Slack, email, or other human-notification skill/tool, it should trigger that after recording the open questions; otherwise the current chat is the fallback channel.
+
+### Plugin skills
+
+Every skill directory is a plugin. There is no registry, hook catalog, or manifest schema: a skill's frontmatter `name` and `description` are the whole contract. At decision points (external source tickets, blocking questions, notifications, code exploration, design context, review, delivery) the core workflows look at the installed skills, pick what fits the project and `PROJECTS.md`, and confirm with you before triggering anything that reaches a human channel or external system. Add a project's connectors (Jira, Teams, Slack, Linear) as ordinary skills; `github-source` is the reference example, and `.agents/templates/plugin-skill/` is a starting point.
 
 ### Skill coordination
 
@@ -216,16 +226,17 @@ Use the skills as one workflow, not as interchangeable shortcuts:
 
 | Situation                                                                                                         | Skill                                             | Output                                                                         |
 | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------ |
-| New project has existing code and the user asks to bootstrap/infer stories                                        | `auto-us`                                         | CodeGraph-derived `group -> feature[]` tickets                                 |
+| New project has existing code and the user asks to bootstrap/infer stories                                        | `doc-collector`                                   | CodeGraph-derived `group -> feature[]` tickets                                 |
 | User gives product notes, requirements, scenarios, or acceptance criteria                                         | `documenter`                                      | Human-authored `group -> feature[]`, feedback groups, or documentation updates |
 | User asks to implement a `group`, `feature`, source ticket, or approved task                                      | `task-implementer`                                | Approval-ready `task` tickets or approved-code implementation                  |
 | Work needs ticket storage, approval state, progress, branch, commits, PRs, pipelines, comments, or open questions | `vibe-kanban`                                     | Durable workflow trace in SQLite                                               |
 | Implementation needs branch, commit, PR, or review discipline                                                     | `task-implementer` + `references/git-workflow.md` | Scoped branch, mandatory local review before commit, and PR trace              |
-| UI implementation changes screens/components                                                                      | `react-ui-implementer`                            | UI work aligned to `DESIGN.md` and existing component patterns                 |
-| UI work creates or extracts reusable React components                                                             | `react-reusable-component-builder`                | Typed reusable components with clear ownership                                 |
+| Approved implementation changes React screens/components                                                          | `task-implementer`                                | Conditionally loads React UI guidance from its references                      |
+| Approved UI work creates or extracts reusable React components                                                    | `task-implementer`                                | Conditionally loads reusable-component guidance from its references            |
 | A project needs its existing visual system captured                                                               | `design-collector`                                | `DESIGN.md` design contract                                                    |
+| A decision point needs an external system (source tickets, Q&A channel, notifications)                            | the fitting plugin skill, confirmed with the user | Plugin outcome recorded on the ticket with `action-log`                        |
 
-The handoff order for a new project with code is: setup, optional `design-collector` for UI projects, explicit `auto-us`, user review, `task-implementer` task planning, user approval, implementation, mandatory local review, commit, PR/review.
+The handoff order for a new project with code is: setup, optional `design-collector` for UI projects, explicit `doc-collector`, user review, `task-implementer` task planning, user approval, implementation, mandatory local review, commit, PR/review.
 
 ## Goal of the Workspace
 

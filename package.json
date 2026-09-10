@@ -1,5 +1,12 @@
 {
   "name": "ai-pack",
   "private": true,
-  "packageManager": "pnpm@11.0.9"
+  "packageManager": "pnpm@11.0.9",
+  "scripts": {
+    "vk": "node --no-warnings=ExperimentalWarning vibe-kanban/scripts/vibe-kanban.mjs",
+    "vk:serve": "node --no-warnings=ExperimentalWarning vibe-kanban/scripts/vibe-kanban.mjs serve",
+    "vk:dev": "pnpm --filter vibe-kanban run dev",
+    "vk:build": "pnpm --filter vibe-kanban run build",
+    "vk:check": "pnpm --filter vibe-kanban run check"
+  }
 }

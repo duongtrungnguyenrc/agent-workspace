@@ -1,4 +1,4 @@
 interface:
   display_name: "Vibe Kanban"
   short_description: "Plan and track agent implementation tickets"
-  default_prompt: "Use $vibe-kanban as the ticket, approval, progress, branch, commit, PR, user-comment, and open-question control plane. Pair it with $documenter for user-provided product docs, $auto-us for explicit codebase-derived story bootstrap, and $task-implementer for implementation planning or approved task execution."
+  default_prompt: "Use $vibe-kanban as the ticket, approval, progress, branch, commit, PR, user-comment, and open-question control plane. Pair it with $documenter for user-provided product docs, $doc-collector for explicit codebase-derived story bootstrap, and $task-implementer for implementation planning or approved task execution."

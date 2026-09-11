@@ -211,14 +211,14 @@ Pending approval and blocked-question commands:
 
 ```bash
 pnpm -s vk comment <task-ticket-id> --comment "<user feedback>" --actor user --quiet
-pnpm -s vk questions <ticket-id> --questions "<markdown questions>" --description "Blocked pending user clarification" --quiet
+pnpm -s vk questions <ticket-id> --category requirement --questions @requirement.md --description "Blocked pending BA decision" --quiet
 ```
 
-User comments let reviewers give feedback before approving a task. Open questions move the ticket to `hold` so unresolved decisions stay visible until a human answers them. If the agent has an available Teams, Slack, email, or other human-notification skill/tool, it should trigger that after recording the open questions; otherwise the current chat is the fallback channel.
+User comments let reviewers give feedback before approving a task. Open questions are classified by audience (`requirement` for BA / Product Owner, `design` for Designer / UX, `technical` for Tech Lead / Developers, `operations` for DevOps / Admin / PM), move the ticket to `hold`, and stay visible until a human answers them; the CLI rejects product-facing questions that contain code evidence so each audience receives questions written for them. If the agent has an available Teams, Slack, email, or other human-notification skill/tool, it should trigger that after recording the open questions; otherwise the current chat is the fallback channel.
 
 ### Plugin skills
 
-Every skill directory is a plugin. There is no registry, hook catalog, or manifest schema: a skill's frontmatter `name` and `description` are the whole contract. At decision points (external source tickets, blocking questions, notifications, code exploration, design context, review, delivery) the core workflows look at the installed skills, pick what fits the project and `PROJECTS.md`, and confirm with you before triggering anything that reaches a human channel or external system. Add a project's connectors (Jira, Teams, Slack, Linear) as ordinary skills; `github-source` is the reference example, and `.agents/templates/plugin-skill/` is a starting point.
+Every skill directory is a plugin. There is no registry, hook catalog, or manifest schema: a skill's frontmatter `name` and `description` are the whole contract. At decision points (external source tickets, blocking questions, notifications, code exploration, design context, review, delivery) the core workflows look at the installed skills, pick what fits the project and `PROJECTS.md`, and confirm with you before triggering anything that reaches a human channel or external system. Add a project's connectors (Jira, Teams, Slack, Linear) as ordinary skills; `github-source` is the reference example, and `.agents/templates/plugin-skill/` is a starting point. The `clarifier` skill is the main consumer: it classifies blocking questions by audience and asks you which channel skill, if any, should deliver each set.
 
 ### Skill coordination
 
@@ -234,6 +234,7 @@ Use the skills as one workflow, not as interchangeable shortcuts:
 | Approved implementation changes React screens/components                                                          | `task-implementer`                                | Conditionally loads React UI guidance from its references                      |
 | Approved UI work creates or extracts reusable React components                                                    | `task-implementer`                                | Conditionally loads reusable-component guidance from its references            |
 | A project needs its existing visual system captured                                                               | `design-collector`                                | `DESIGN.md` design contract                                                    |
+| Analysis or implementation is blocked on a question only a BA, designer, tech lead, or ops owner can answer      | `clarifier`                                       | Classified questions on the ticket, sent through a confirmed channel skill    |
 | A decision point needs an external system (source tickets, Q&A channel, notifications)                            | the fitting plugin skill, confirmed with the user | Plugin outcome recorded on the ticket with `action-log`                        |
 
 The handoff order for a new project with code is: setup, optional `design-collector` for UI projects, explicit `doc-collector`, user review, `task-implementer` task planning, user approval, implementation, mandatory local review, commit, PR/review.

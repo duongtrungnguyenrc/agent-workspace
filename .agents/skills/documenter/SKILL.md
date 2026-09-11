@@ -52,7 +52,7 @@ During story analysis, stop and ask the user before creating or updating tickets
 
 Ask one concise question that names the tradeoff or options. If the uncertainty is minor and does not affect product meaning, proceed with a documented assumption in the ticket `specification` instead of blocking.
 
-When the question belongs to an existing ticket, record it with `pnpm -s vk questions <ticket-id> --questions "<markdown questions>" --description "Blocked pending user clarification" --quiet` so the ticket moves to `hold`. Then consider the installed skills that can carry questions to humans; ask the user in one question whether to send through the fitting plugin (name it and the channel) or answer here, record the outcome with `action-log --action-type plugin:<name>`, and ask in the current chat when nothing fits or the user declines.
+When the question belongs to an existing ticket, hand it to the `clarifier` skill with the ticket id and the situation. It classifies the question by audience (story work mostly produces `requirement` questions for the BA / Product Owner and `design` questions for the Designer / UX, written in product language with no code evidence), records it with `questions --category` so the ticket moves to `hold`, finds channel skills and asks you before sending, and stores the answers on the ticket.
 
 ## Create Story Workflow
 

@@ -60,6 +60,7 @@ export function TicketCard({ ticket, tickets, onOpen, onAction }: TicketCardProp
           </Badge>
           {ticket.kind ? <Badge tone={kindTone[ticket.kind]}>{formatKind(ticket.kind)}</Badge> : null}
           {ticket.type === "task" && ticket.local_review === "requested" ? <Badge tone="orange">Review needed</Badge> : null}
+          {String(ticket.open_questions || "").trim() ? <Badge tone="amber">Questions</Badge> : null}
         </div>
         <span className="shrink-0 text-xs font-medium text-muted-foreground tabular-nums">{progress}%</span>
       </div>

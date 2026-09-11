@@ -32,6 +32,7 @@ Use local-first building blocks:
 - Node.js scripts for the agent CLI and local server
 - lightweight Socket.IO events for realtime UI refresh
 - straightforward SQL instead of an ORM, unless the host project already uses one
+- every connection opens SQLite with `journal_mode = WAL`, `busy_timeout = 5000`, and `synchronous = NORMAL`, so the long-lived server connection and short-lived CLI commands can overlap without "database is locked" failures; the server never watches the database file's mtime (WAL writes do not change it) and logs, rather than dies on, a failed poll or request
 
 Do not introduce Python, external databases, authentication, cloud services, SSE, message queues, microservices, or broad project-management features.
 
@@ -370,7 +371,7 @@ The UI should provide:
 - activity logs page with cursor-based infinite scroll (50 events per page, newest first, older pages fetched with `before`)
 - realtime notifications that name the event, ticket code, title, type, kind, actor, and change details, and open the ticket on click
 
-Use Socket.IO for lightweight realtime refresh. The server keeps the id of the last emitted event and, after every API mutation and on every SQLite file change (CLI writes), emits one message per new `ticket_events` row:
+Use Socket.IO for lightweight realtime refresh. The server keeps the id of the last emitted event and, after every API mutation and on a 500 ms poll of the event tail (which picks up CLI writes), emits one message per new `ticket_events` row:
 
 ```js
 io.emit("tickets:changed", {

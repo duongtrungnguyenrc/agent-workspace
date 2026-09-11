@@ -32,7 +32,7 @@ Record the fetch: `pnpm -s vk action-log <id> --action-type plugin:github-source
 
 ## Post blocking questions to the issue
 
-Only after the user confirms. Post the ticket's `open_questions` as one comment so reviewers see them where the requirement lives:
+Only after the user confirms. Post the `requirement` and `design` sections of the ticket's `open_questions` as one comment so product reviewers see them where the requirement lives; keep `technical` and `operations` sections for the developer or operations channel the user chooses:
 
 ```bash
 gh issue comment <n> --repo <owner>/<repo> --body-file <questions.md>

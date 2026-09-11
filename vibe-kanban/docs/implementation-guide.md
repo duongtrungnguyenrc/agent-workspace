@@ -312,7 +312,8 @@ vibe-kanban delete <ticket-id> --cascade --description <text> --quiet
 vibe-kanban activity --limit 50 --before <event-id> --json
 vibe-kanban approve <ticket-id> --description <text> --quiet
 vibe-kanban comment <ticket-id> --comment <text> --actor user --quiet
-vibe-kanban questions <ticket-id> --questions <text> --description <text> --quiet
+vibe-kanban questions <ticket-id> --category <requirement|design|technical|operations> --questions <text> --description <text> --dry-run --quiet
+vibe-kanban questions <ticket-id> --clear --category <category> --quiet
 vibe-kanban start <ticket-id> --description <text> --quiet
 vibe-kanban progress <ticket-id> --percent <0-100> --note <text> --description <text> --quiet
 vibe-kanban progress-log <ticket-id> --step <name|number> --step-status <pending|in_progress|completed|blocked> --description <text> --percent <0-100> --quiet
@@ -343,7 +344,7 @@ The `approve` and `start` commands must apply only to `task` tickets. The `start
 
 Task tickets also carry a local review gate. `local_review` moves `pending -> requested` when the agent records what to review (`local_review_note` keeps the description), then `confirmed` or `changes_requested` by the user (UI action or CLI with `--actor user`). `add-commit` and `pr` must fail for task tickets unless `local_review` is `confirmed` or `skipped`; `--skip-local-review <reason>` sets `skipped` and records `ticket.local_review_skipped` so an explicit user instruction stays auditable. A specification or execution plan change resets the state to `pending`. Each transition records `ticket.local_review_<state>`.
 
-The `comment` command appends a timestamped user comment and should not change approval state by itself. The `questions` command replaces the current open questions, moves the ticket to `hold`, and preserves the blocking questions for the user and agent. Agents should use any available human-notification skill or tool after writing open questions; if none exists, the current conversation is the fallback notification channel.
+The `comment` command appends a timestamped user comment and should not change approval state by itself. The `questions` command stores open questions as classified sections (`## <Category> — for <audience>`), replacing only the section for the given `--category`, and moves the ticket to `hold`. Categories and their content rules: `requirement` (BA / Product Owner) and `design` (Designer / UX) must not contain code evidence (file paths, identifiers, method calls, stack traces, SQL, endpoints, implementation terms); `technical` (Tech Lead / Developers) should cite evidence and gets a warning when it does not; `operations` (DevOps / Admin / PM) may reference systems. Every category rejects secret values. `--dry-run` validates without writing; `--clear [--category]` removes answered sections and records `ticket.questions_cleared`. The `ticket.questions_opened` payload carries `category`, `audience`, `count`, and lint `warnings` so notifications and plugins can route each section to the right people. Agents should use any available human-notification skill or tool after writing open questions; if none exists, the current conversation is the fallback notification channel.
 
 Status-changing commands should accept `--description <text|@file>` so agents can explain why a ticket moved. `progress-log` records implementation activity, optionally updates a derived checklist step, records `ticket.progress_logged`, and produces no CLI output by default unless `--json` is requested. When `--step-status` is given without `--percent`, `progress_percent` is recomputed as completed steps over total steps.
 

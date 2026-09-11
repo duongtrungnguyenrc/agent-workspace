@@ -74,7 +74,25 @@ Source tickets and work tickets are different. A Jira, external Kanban, Linear, 
 9. Read the linked parent ticket and grandparent `group` ticket from Vibe Kanban when present.
 10. Recall relevant project memory (agentmemory when available) before planning or coding. Use memory as context, not as an override for the approved ticket.
 11. Identify the source ticket context, group, feature, task objective, acceptance criteria, constraints, open questions, assumptions, and approved execution plan from Vibe Kanban ticket content.
-12. If any unresolved product, UX, data, integration, risk, or scope question affects implementation, write the questions to the task with `pnpm -s vk questions <task-ticket-id> --questions "<markdown questions>" --description "Blocked pending user clarification" --quiet`, leaving the ticket on `hold`. Then consider the installed skills that can carry questions to humans (for example `github-source` posting to the source issue, or a Teams, Slack, or Jira skill the project has): ask the user in one question whether to send the questions through the fitting plugin, naming it and the channel, or to answer here; record the outcome with `action-log --action-type plugin:<name>`; when nothing fits or the user declines, ask in the current chat. Do not code while such a question is unresolved.
+12. If any unresolved product, UX, data, integration, risk, or scope question affects implementation, classify each question by who must answer it and write it in that audience's language:
+
+    | Category | Audience | Ask about | Content rule |
+    | --- | --- | --- | --- |
+    | `requirement` | BA / Product Owner | expected behavior, scope, acceptance criteria, priority, business rules | No code evidence: no file paths, identifiers, stack traces, SQL, endpoints, or implementation terms. Describe the observable situation and the decision needed |
+    | `design` | Designer / UX | flows, layout, states, copy, interaction | Same rule as requirement; reference screens and states, not components |
+    | `technical` | Tech Lead / Developers | architecture, data contracts, integrations, migrations, code tradeoffs | Cite the evidence (path, symbol, log, endpoint, data shape) and the options considered |
+    | `operations` | DevOps / Admin / PM | environments, access, credential ownership, releases, deadlines | Never include secret values |
+
+    One situation often yields two questions: the requirement question for the BA ("When a recipient is disabled, should the preview still greet them?") and the technical question for the tech lead ("`buildGreeting()` in `src/preview/greeting.ts` reads the first enabled recipient; should disabled ones be filtered upstream?"). Do not send the BA the technical one.
+
+    Record each category separately; the command rejects text that breaks the category rule, so fix the wording rather than forcing it through:
+
+    ```bash
+    pnpm -s vk questions <task-ticket-id> --category requirement --questions @req.md --description "Blocked pending BA decision" --quiet
+    pnpm -s vk questions <task-ticket-id> --category technical --questions @tech.md --description "Blocked pending tech lead decision" --quiet
+    ```
+
+    Use `--dry-run --json` to check a draft first. The ticket moves to `hold`. Then route each category to the people it is for: consider the installed skills that can carry questions to humans (for example `github-source` posting to the source issue for requirement questions, or a Teams, Slack, or Jira skill the project has for a specific audience); ask the user in one question, per category, whether to send through the fitting plugin, naming it and the channel, or to answer here; record the outcome with `action-log --action-type plugin:<name>`; when nothing fits or the user declines, ask in the current chat. When a category is answered, store the answer with `comment --actor user` and clear it with `questions <id> --clear --category <c>`. Do not code while such a question is unresolved.
 13. Read [references/git-workflow.md](references/git-workflow.md), then use it before code changes to inspect the worktree and checkout a working branch from `develop` using a Husky/conventional-compatible branch name:
 
 ```bash

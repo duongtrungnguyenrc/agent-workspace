@@ -211,10 +211,10 @@ Pending approval and blocked-question commands:
 
 ```bash
 pnpm -s vk comment <task-ticket-id> --comment "<user feedback>" --actor user --quiet
-pnpm -s vk questions <ticket-id> --questions "<markdown questions>" --description "Blocked pending user clarification" --quiet
+pnpm -s vk questions <ticket-id> --category requirement --questions @requirement.md --description "Blocked pending BA decision" --quiet
 ```
 
-User comments let reviewers give feedback before approving a task. Open questions move the ticket to `hold` so unresolved decisions stay visible until a human answers them. If the agent has an available Teams, Slack, email, or other human-notification skill/tool, it should trigger that after recording the open questions; otherwise the current chat is the fallback channel.
+User comments let reviewers give feedback before approving a task. Open questions are classified by audience (`requirement` for BA / Product Owner, `design` for Designer / UX, `technical` for Tech Lead / Developers, `operations` for DevOps / Admin / PM), move the ticket to `hold`, and stay visible until a human answers them; the CLI rejects product-facing questions that contain code evidence so each audience receives questions written for them. If the agent has an available Teams, Slack, email, or other human-notification skill/tool, it should trigger that after recording the open questions; otherwise the current chat is the fallback channel.
 
 ### Plugin skills
 

@@ -1456,6 +1456,11 @@ function serve(args) {
   process.on("unhandledRejection", (reason) => {
     console.error(`[vibe-kanban] unhandled rejection: ${reason instanceof Error ? reason.stack : String(reason)}`);
   });
+  // Failing to bind (port in use, bad host) must exit rather than be swallowed by the guards above.
+  server.on("error", (error) => {
+    console.error(`[vibe-kanban] cannot listen on ${host}:${port}: ${error.message}`);
+    process.exit(1);
+  });
   server.listen(port, host, () => {
     console.log(`Vibe Kanban running at http://${host}:${server.address().port}`);
     console.log(`SQLite database: ${databasePath}`);

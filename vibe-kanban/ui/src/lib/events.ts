@@ -19,6 +19,7 @@ const labels: Record<string, string> = {
   "ticket.action_logged": "Action logged",
   "ticket.user_commented": "User commented",
   "ticket.questions_opened": "Questions opened",
+  "ticket.questions_cleared": "Questions cleared",
   "ticket.review_requested": "Review requested",
   "ticket.local_review_requested": "Local review requested",
   "ticket.local_review_changes_requested": "Local review: changes requested",
@@ -96,6 +97,10 @@ export function eventSummary(type: string, payload: Record<string, unknown>): st
   if (url) parts.push(url);
   const comment = text(payload.comment);
   if (comment) parts.push(`Comment: ${comment}`);
+  const category = text(payload.category);
+  const audience = text(payload.audience);
+  if (category && audience) parts.push(`${category.charAt(0).toUpperCase()}${category.slice(1)} questions for ${audience}`);
+  else if (category) parts.push(`Category: ${category}`);
   const questions = text(payload.questions);
   if (questions) parts.push(`Questions: ${questions}`);
   const description = text(payload.description);

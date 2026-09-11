@@ -213,3 +213,20 @@ When human-managed UAT or QC feedback is not naturally a user story but needs re
 - Do not create local `documents/**`, `document.md`, product-doc `progress.md`, `.agents/processes/**/plan.md`, or `.agents/processes/**/progress.md` files as part of this skill.
 - Use Vibe Kanban task ticket progress, events, commits, branch, PR, pipeline, action items, and action events for implementation trace.
 - Use Vibe Kanban IDs and parent-child links as the durable navigation structure.
+
+## Open Question Sets
+
+Record blocking questions per audience with `pnpm -s vk questions <ticket-id> --category <c> --questions @file`. One file per category; the command rejects text that does not fit the category.
+
+```markdown
+<!-- requirement.md: BA / Product Owner. Observable behavior and the decision needed. No paths, identifiers, or implementation terms. -->
+- When a recipient is disabled after the email is scheduled, should the preview still greet them by name?
+- Is the greeting expected to change per recipient, or stay fixed to the first enabled recipient?
+```
+
+```markdown
+<!-- technical.md: Tech Lead / Developers. Cite the evidence and the options. -->
+- `buildGreeting()` in `src/preview/greeting.ts` greets the first enabled recipient; should disabled recipients be filtered in `RecipientRepository.listEnabled()` instead, so all previews share one rule?
+- The `recipients.enabled` flag is nullable in the current migration; treat `NULL` as enabled or disabled?
+```
+

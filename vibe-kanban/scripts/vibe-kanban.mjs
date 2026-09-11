@@ -12,6 +12,14 @@ const TICKET_TYPES = ["group", "feature", "task"];
 const KINDS = ["feature", "bugfix", "refactor", "chore", "docs", "test"];
 const STEP_STATUSES = ["pending", "in_progress", "completed", "blocked"];
 const LOCAL_REVIEW_STATES = ["pending", "requested", "changes_requested", "confirmed", "skipped"];
+// Open questions are classified so they can be routed to the right people. Each category has an audience and content rules
+// that the `questions` command enforces: product-facing categories must not carry code evidence, technical ones should.
+const QUESTION_CATEGORIES = {
+  requirement: { label: "Requirement", audience: "BA / Product Owner", code: "forbidden", about: "business behavior, scope, acceptance criteria, priority, business rules" },
+  design: { label: "Design", audience: "Designer / UX", code: "forbidden", about: "flows, layout, states, copy, interaction, visual direction" },
+  technical: { label: "Technical", audience: "Tech Lead / Developers", code: "required", about: "architecture, data contracts, integrations, migrations, code-level tradeoffs" },
+  operations: { label: "Operations", audience: "DevOps / Admin / PM", code: "allowed", about: "environments, access, credentials ownership, releases, deadlines" },
+};
 const KIND_SIGNALS = {
   bugfix: [["fix", 2], ["fixes", 2], ["fixed", 2], ["bug", 2], ["hotfix", 2], ["broken", 2], ["crash", 2], ["crashes", 2], ["regression", 2], ["defect", 2], ["not working", 2], ["does not work", 2], ["doesn't work", 2], ["error", 1], ["fail", 1], ["fails", 1], ["failing", 1], ["incorrect", 1], ["wrong", 1], ["lỗi", 2], ["sửa", 2], ["sai", 1]],
   feature: [["feature", 2], ["implement", 2], ["introduce", 2], ["add", 1], ["new", 1], ["create", 1], ["support", 1], ["enable", 1], ["allow", 1], ["build", 1], ["tính năng", 2], ["thêm", 1], ["mới", 1]],
@@ -47,7 +55,8 @@ Commands:
   delete <ticket-id> [--cascade] [--description <text|@file>] [--json] [--quiet]
   approve <ticket-id> [--actor <name>] [--description <text|@file>] [--quiet]
   comment <ticket-id> --comment <text|@file> [--actor <name>] [--quiet]
-  questions <ticket-id> --questions <text|@file> [--description <text|@file>] [--quiet]
+  questions <ticket-id> --category <requirement|design|technical|operations> --questions <text|@file> [--description <text|@file>] [--dry-run] [--quiet]
+  questions <ticket-id> --clear [--category <category>] [--description <text|@file>] [--quiet]
   start <ticket-id> [--description <text|@file>] [--quiet]
   progress <ticket-id> --percent <0-100> [--note <text|@file>] [--description <text|@file>] [--quiet]
   progress-log <ticket-id> --description <text|@file> [--step <name|number>] [--step-status <pending|in_progress|completed|blocked>] [--percent <0-100>] [--quiet]
@@ -112,7 +121,7 @@ function parseArgs(argv) {
       continue;
     }
     const key = token.slice(2).replaceAll("-", "_");
-    if (key === "json" || key === "help" || key === "quiet" || key === "cascade") {
+    if (key === "json" || key === "help" || key === "quiet" || key === "cascade" || key === "dry_run" || key === "clear") {
       args[key] = true;
       continue;
     }
@@ -870,17 +879,142 @@ function commentTicket(db, id, args) {
   return requireTicket(db, id);
 }
 
+const CODE_EVIDENCE_PATTERNS = [
+  [/`[^`]+`/, "inline code"],
+  [/\b[\w@./-]+\.(?:tsx?|jsx?|mjs|cjs|py|java|kt|go|rs|rb|php|cs|sql|css|scss|json|ya?ml|toml|env|sh)\b/i, "file path"],
+  [/\b(?:src|lib|app|apps|packages|components|services|modules|controllers|migrations|node_modules)\/[\w./-]+/, "source path"],
+  [/\b\w+\.\w+\([^)]*\)/, "method call"],
+  [/\b\w+_\w+\(/, "function call"],
+  [/\bat\s+\S+\s+\([^)]*:\d+:\d+\)/, "stack trace"],
+  [/\b(?:TypeError|ReferenceError|NullPointerException|Exception|Traceback)\b/, "exception"],
+  [/\b(?:SELECT|INSERT INTO|UPDATE\s+\w+\s+SET|DELETE FROM|ALTER TABLE|CREATE TABLE)\b/, "SQL"],
+  [/\b(?:GET|POST|PUT|PATCH|DELETE)\s+\/\S+/, "HTTP endpoint"],
+  [/#L\d+/, "line reference"],
+  [/\b[0-9a-f]{7,40}\b(?=.*\b(?:commit|sha|hash)\b)/i, "commit hash"],
+  [/\b(?:useState|useEffect|props|middleware|repository|controller|resolver|DTO|ORM|API key|env var|environment variable)\b/, "implementation term"],
+];
+const SECRET_PATTERNS = [
+  [/\b(?:password|passwd|secret|token|api[_-]?key)\s*[:=]\s*\S+/i, "credential value"],
+  [/\b(?:ghp|gho|ghu|ghs|github_pat)_[A-Za-z0-9_]{20,}/, "GitHub token"],
+  [/\bAKIA[0-9A-Z]{16}\b/, "AWS access key"],
+  [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, "private key"],
+  [/\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}/, "JWT"],
+];
+
+function questionLines(text) {
+  return String(text || "").split("\n").map((line, index) => ({ line: line.trim(), index: index + 1 })).filter((item) => item.line);
+}
+
+// Returns { errors, warnings } describing whether the text fits the category's content rules.
+function lintQuestions(category, text) {
+  const spec = QUESTION_CATEGORIES[category];
+  const errors = [];
+  const warnings = [];
+  const lines = questionLines(text);
+  if (!lines.length) errors.push("no question text");
+  for (const { line, index } of lines) {
+    for (const [pattern, label] of SECRET_PATTERNS) {
+      if (pattern.test(line)) errors.push(`line ${index}: contains a ${label}; never put secrets in a question`);
+    }
+  }
+  const evidence = [];
+  for (const { line, index } of lines) {
+    for (const [pattern, label] of CODE_EVIDENCE_PATTERNS) {
+      const match = line.match(pattern);
+      if (match && !evidence.some((item) => item.index === index && item.snippet === match[0].slice(0, 60))) {
+        evidence.push({ index, label, snippet: match[0].slice(0, 60) });
+      }
+    }
+  }
+  if (spec.code === "forbidden" && evidence.length) {
+    for (const item of evidence) {
+      errors.push(`line ${item.index}: ${item.label} "${item.snippet}" does not belong in a ${category} question for ${spec.audience}; rewrite it in product language or move it to a technical question`);
+    }
+  }
+  if (spec.code === "required" && !evidence.length) {
+    warnings.push(`technical questions should cite evidence (file path, symbol, log, endpoint, or data shape) so ${spec.audience} can answer without re-investigating`);
+  }
+  const bullets = lines.filter((item) => /^[-*]\s+|^\d+[.)]\s+/.test(item.line));
+  for (const { line, index } of bullets) {
+    if (!/\?\s*$/.test(line)) warnings.push(`line ${index}: does not end with a question mark; state the decision you need as a question`);
+  }
+  if (!bullets.length && lines.length) warnings.push("write each question as its own list item so answers can be matched to questions");
+  return { errors, warnings };
+}
+
+function parseQuestionSections(markdown) {
+  const sections = {};
+  let current = null;
+  const legacy = [];
+  for (const line of String(markdown || "").split("\n")) {
+    const heading = line.match(/^## (\w+)/);
+    const key = heading ? heading[1].toLowerCase() : null;
+    if (key && QUESTION_CATEGORIES[key]) {
+      current = key;
+      sections[current] = [];
+      continue;
+    }
+    if (current) sections[current].push(line);
+    else if (line.trim()) legacy.push(line);
+  }
+  for (const key of Object.keys(sections)) sections[key] = sections[key].join("\n").trim();
+  return { sections, legacy: legacy.join("\n").trim() };
+}
+
+function renderQuestionSections(sections, legacy = "") {
+  const parts = [];
+  for (const key of Object.keys(QUESTION_CATEGORIES)) {
+    if (!sections[key]) continue;
+    const spec = QUESTION_CATEGORIES[key];
+    parts.push(`## ${spec.label} — for ${spec.audience}\n\n${sections[key]}`);
+  }
+  if (legacy) parts.push(`## Unclassified — reclassify with --category\n\n${legacy}`);
+  return parts.join("\n\n");
+}
+
 function setOpenQuestions(db, id, args) {
+  const ticket = requireTicket(db, id);
+  const parsed = parseQuestionSections(ticket.open_questions);
+  const category = args.category ? String(args.category).toLowerCase() : "";
+  if (args.clear) {
+    if (category && !QUESTION_CATEGORIES[category]) fail(`unknown question category: ${category}`);
+    if (category) delete parsed.sections[category];
+    const remaining = category ? renderQuestionSections(parsed.sections, parsed.legacy) : "";
+    db.prepare("UPDATE tickets SET open_questions = ?, updated_at = ? WHERE id = ?").run(remaining, now(), Number(id));
+    recordEvent(db, Number(id), "ticket.questions_cleared", { category: category || "all", description: eventDescription(args) }, args.actor || "agent");
+    return requireTicket(db, id);
+  }
   const questions = readValue(args.questions || args.open_questions || "").trim();
   if (!questions) fail("questions requires --questions <text|@file>");
-  const ticket = requireTicket(db, id);
-  db.prepare("UPDATE tickets SET status = 'hold', open_questions = ?, updated_at = ? WHERE id = ?").run(questions, now(), Number(id));
+  if (!category) {
+    fail(
+      `questions requires --category <${Object.keys(QUESTION_CATEGORIES).join("|")}>. Classify each question by who must answer it: ` +
+        Object.entries(QUESTION_CATEGORIES).map(([key, spec]) => `${key} → ${spec.audience} (${spec.about})`).join("; "),
+    );
+  }
+  if (!QUESTION_CATEGORIES[category]) fail(`unknown question category: ${category}. Expected one of: ${Object.keys(QUESTION_CATEGORIES).join(", ")}`);
+  const spec = QUESTION_CATEGORIES[category];
+  const lint = lintQuestions(category, questions);
+  if (lint.errors.length) {
+    fail(`questions for ${category} (${spec.audience}) rejected:\n- ${lint.errors.join("\n- ")}`);
+  }
+  if (args.dry_run) {
+    return { ticket_id: Number(id), category, audience: spec.audience, ok: true, warnings: lint.warnings, questions };
+  }
+  parsed.sections[category] = questions;
+  const rendered = renderQuestionSections(parsed.sections, parsed.legacy);
+  db.prepare("UPDATE tickets SET status = 'hold', open_questions = ?, updated_at = ? WHERE id = ?").run(rendered, now(), Number(id));
   recordEvent(db, Number(id), "ticket.questions_opened", {
     from: ticket.status,
     to: "hold",
+    category,
+    audience: spec.audience,
+    count: questionLines(questions).filter((item) => /^[-*]\s+|^\d+[.)]\s+/.test(item.line)).length || questionLines(questions).length,
+    warnings: lint.warnings,
     questions,
     description: eventDescription(args),
   });
+  if (lint.warnings.length && !args.json) console.error(`questions recorded with warnings:\n- ${lint.warnings.join("\n- ")}`);
   return requireTicket(db, id);
 }
 

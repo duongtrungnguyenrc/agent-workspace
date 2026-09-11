@@ -26,7 +26,7 @@ Every installed skill is a plugin. At the decision points below, look at the ins
 | 1 | External source tickets to read | Ask the user for the content; store it as `source_snapshot` |
 | 4, 10 | Project memory (agentmemory when available) | Skip |
 | 4, 15 | Code exploration (CodeGraph when indexed) | Targeted Read/Grep; record the limitation in the task `specification` |
-| 12 | Blocking questions for humans | Ask in the current chat; the ticket stays on `hold` |
+| 12 | Blocking questions for humans | Delegate to the `clarifier` skill; it asks in chat when no channel skill fits and keeps the ticket on `hold` |
 | 17 | Design context for UI work | Nearest `DESIGN.md`, then the React references |
 | 24 | Review before commit | PR Review stance in [references/git-workflow.md](references/git-workflow.md) |
 | 27 | Delivery and notification | GitHub CLI steps in the same reference; mention the PR in chat |
@@ -74,25 +74,7 @@ Source tickets and work tickets are different. A Jira, external Kanban, Linear, 
 9. Read the linked parent ticket and grandparent `group` ticket from Vibe Kanban when present.
 10. Recall relevant project memory (agentmemory when available) before planning or coding. Use memory as context, not as an override for the approved ticket.
 11. Identify the source ticket context, group, feature, task objective, acceptance criteria, constraints, open questions, assumptions, and approved execution plan from Vibe Kanban ticket content.
-12. If any unresolved product, UX, data, integration, risk, or scope question affects implementation, classify each question by who must answer it and write it in that audience's language:
-
-    | Category | Audience | Ask about | Content rule |
-    | --- | --- | --- | --- |
-    | `requirement` | BA / Product Owner | expected behavior, scope, acceptance criteria, priority, business rules | No code evidence: no file paths, identifiers, stack traces, SQL, endpoints, or implementation terms. Describe the observable situation and the decision needed |
-    | `design` | Designer / UX | flows, layout, states, copy, interaction | Same rule as requirement; reference screens and states, not components |
-    | `technical` | Tech Lead / Developers | architecture, data contracts, integrations, migrations, code tradeoffs | Cite the evidence (path, symbol, log, endpoint, data shape) and the options considered |
-    | `operations` | DevOps / Admin / PM | environments, access, credential ownership, releases, deadlines | Never include secret values |
-
-    One situation often yields two questions: the requirement question for the BA ("When a recipient is disabled, should the preview still greet them?") and the technical question for the tech lead ("`buildGreeting()` in `src/preview/greeting.ts` reads the first enabled recipient; should disabled ones be filtered upstream?"). Do not send the BA the technical one.
-
-    Record each category separately; the command rejects text that breaks the category rule, so fix the wording rather than forcing it through:
-
-    ```bash
-    pnpm -s vk questions <task-ticket-id> --category requirement --questions @req.md --description "Blocked pending BA decision" --quiet
-    pnpm -s vk questions <task-ticket-id> --category technical --questions @tech.md --description "Blocked pending tech lead decision" --quiet
-    ```
-
-    Use `--dry-run --json` to check a draft first. The ticket moves to `hold`. Then route each category to the people it is for: consider the installed skills that can carry questions to humans (for example `github-source` posting to the source issue for requirement questions, or a Teams, Slack, or Jira skill the project has for a specific audience); ask the user in one question, per category, whether to send through the fitting plugin, naming it and the channel, or to answer here; record the outcome with `action-log --action-type plugin:<name>`; when nothing fits or the user declines, ask in the current chat. When a category is answered, store the answer with `comment --actor user` and clear it with `questions <id> --clear --category <c>`. Do not code while such a question is unresolved.
+12. If any unresolved product, UX, data, integration, risk, or scope question affects implementation, hand it to the `clarifier` skill with the task ticket id and the situation. That skill reasons out the decision and options, classifies each question by audience (`requirement` for BA / Product Owner, `design` for Designer / UX, `technical` for Tech Lead / Developers, `operations` for DevOps / Admin / PM), writes it in that audience's language, records it with `questions --category` so the ticket moves to `hold`, finds channel skills (Teams, Slack, Jira, GitHub issue) and asks you before sending, and stores answers back on the ticket. Do not code while such a question is unresolved; when it is answered, update the specification or plan and ask for approval again if the plan changed.
 13. Read [references/git-workflow.md](references/git-workflow.md), then use it before code changes to inspect the worktree and checkout a working branch from `develop` using a Husky/conventional-compatible branch name:
 
 ```bash

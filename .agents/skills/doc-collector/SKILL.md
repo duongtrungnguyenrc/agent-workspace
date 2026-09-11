@@ -30,7 +30,7 @@ Use native text search only for literal labels, menu text, route strings, or aft
 
 Stop and ask the user before creating or updating tickets when the scan reveals multiple reasonable product maps, ambiguous feature ownership, unclear actor intent, overlapping feature clusters, or a non-user-facing area that might be better represented as `task`.
 
-Ask a concise question with the discovered options. If the uncertainty is only about labels or minor grouping and does not change the product map, proceed with a documented assumption in the ticket `specification`.
+Ask a concise question with the discovered options. If the uncertainty is only about labels or minor grouping and does not change the product map, proceed with a documented assumption in the ticket `specification`. When the question belongs to an existing ticket and needs a product owner or designer rather than the developer in the chat, hand it to the `clarifier` skill.
 
 ## Ticket Creation
 

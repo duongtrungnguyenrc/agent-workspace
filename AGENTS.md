@@ -16,6 +16,7 @@ Implementation execution is scoped to `root-workspace/source/**`. Do not modify 
 - Direct Vibe Kanban operation (CLI/API/UI): use `.agents/skills/vibe-kanban/SKILL.md`.
 - Vibe Kanban tool development (schema, CLI, server, UI): read `vibe-kanban/docs/implementation-guide.md` first; the tool is workspace infrastructure, so changes there are not gated by a task ticket unless the user asks for one.
 - React UI and reusable-component guidance is routed by `.agents/skills/task-implementer/SKILL.md` through its conditional references.
+- Blocking questions for humans (reasoning, audience classification, recording on the ticket, sending through channel skills after the developer confirms): use `.agents/skills/clarifier/SKILL.md`.
 - Existing design-language extraction: use `.agents/skills/design-collector/SKILL.md`.
 - Any other skill under `.agents/skills/` is a plugin considered at decision points; see Mandatory Invariants.
 

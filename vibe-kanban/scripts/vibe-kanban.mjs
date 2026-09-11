@@ -11,6 +11,7 @@ const STATUSES = ["open", "in_progress", "in_review", "closed", "hold", "cancell
 const TICKET_TYPES = ["group", "feature", "task"];
 const KINDS = ["feature", "bugfix", "refactor", "chore", "docs", "test"];
 const STEP_STATUSES = ["pending", "in_progress", "completed", "blocked"];
+const LOCAL_REVIEW_STATES = ["pending", "requested", "changes_requested", "confirmed", "skipped"];
 const KIND_SIGNALS = {
   bugfix: [["fix", 2], ["fixes", 2], ["fixed", 2], ["bug", 2], ["hotfix", 2], ["broken", 2], ["crash", 2], ["crashes", 2], ["regression", 2], ["defect", 2], ["not working", 2], ["does not work", 2], ["doesn't work", 2], ["error", 1], ["fail", 1], ["fails", 1], ["failing", 1], ["incorrect", 1], ["wrong", 1], ["lỗi", 2], ["sửa", 2], ["sai", 1]],
   feature: [["feature", 2], ["implement", 2], ["introduce", 2], ["add", 1], ["new", 1], ["create", 1], ["support", 1], ["enable", 1], ["allow", 1], ["build", 1], ["tính năng", 2], ["thêm", 1], ["mới", 1]],
@@ -51,12 +52,13 @@ Commands:
   progress <ticket-id> --percent <0-100> [--note <text|@file>] [--description <text|@file>] [--quiet]
   progress-log <ticket-id> --description <text|@file> [--step <name|number>] [--step-status <pending|in_progress|completed|blocked>] [--percent <0-100>] [--quiet]
   hold <ticket-id> [--description <text|@file>] [--quiet]
+  local-review <ticket-id> --status <requested|changes_requested|confirmed> [--description <text|@file>] [--actor <name>] [--quiet]
   review <ticket-id> [--description <text|@file>] [--quiet]
   close <ticket-id> [--description <text|@file>] [--quiet]
   cancel <ticket-id> [--description <text|@file>] [--quiet]
   move <ticket-id> --status <open|in_progress|hold|cancelled|in_review|closed> [--description <text|@file>] [--quiet]
-  add-commit <ticket-id> --commit-hash <hash> [--url <url>] [--parent-hash <hash>] [--branch <branch>] [--message <message>] [--author <author>]
-  pr <ticket-id> [--pr-url <url>] [--pr-number <number>] [--pr-status <status>] [--description <text|@file>] [--quiet]
+  add-commit <ticket-id> --commit-hash <hash> [--url <url>] [--parent-hash <hash>] [--branch <branch>] [--message <message>] [--author <author>] [--skip-local-review <reason>]
+  pr <ticket-id> [--pr-url <url>] [--pr-number <number>] [--pr-status <status>] [--description <text|@file>] [--skip-local-review <reason>] [--quiet]
   pipeline <ticket-id> [--pipeline-status <status>] [--pipeline-url <url>] [--description <text|@file>] [--quiet]
   action-log <ticket-id> --description <text|@file> [--action-type <type>] [--status <status>] [--url <url>] [--quiet]
   events <ticket-id> [--json]
@@ -174,6 +176,8 @@ function openDb() {
       source_evidence TEXT NOT NULL DEFAULT '[]',
       user_comments TEXT NOT NULL DEFAULT '',
       open_questions TEXT NOT NULL DEFAULT '',
+      local_review TEXT NOT NULL DEFAULT 'pending',
+      local_review_note TEXT NOT NULL DEFAULT '',
       branch TEXT,
       base_commit TEXT,
       head_commit TEXT,
@@ -240,6 +244,8 @@ function openDb() {
   ensureColumn(db, "tickets", "open_questions", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "tickets", "source_evidence", "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, "tickets", "kind", "TEXT");
+  ensureColumn(db, "tickets", "local_review", "TEXT NOT NULL DEFAULT 'pending'");
+  ensureColumn(db, "tickets", "local_review_note", "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, "ticket_commits", "url", "TEXT");
   migrateLegacyTypes(db);
   backfillPlanSteps(db);
@@ -397,6 +403,8 @@ function boolRow(row) {
     source_evidence: Array.isArray(sourceEvidence) ? sourceEvidence : [],
     user_comments: row.user_comments || "",
     open_questions: row.open_questions || "",
+    local_review: row.local_review || "pending",
+    local_review_note: row.local_review_note || "",
     action_items: row.action_items || "",
   };
 }
@@ -819,6 +827,7 @@ function updateTicket(db, id, args) {
   if (specChanged || planChanged) {
     fields.user_reviewed = 0;
     fields.approved_revision_id = null;
+    if (!ticket.commits.length && ticket.local_review !== "pending" && ticket.local_review !== "skipped") fields.local_review = "pending";
   }
   if (Object.keys(fields).length === 0) return ticket;
 
@@ -960,8 +969,50 @@ function progressLog(db, id, args) {
   return requireTicket(db, id);
 }
 
+// Mandatory local user review before commit/PR. Task tickets must reach local_review = confirmed (via the UI
+// button or `local-review --status confirmed --actor user`) before commits or PR trace can be recorded.
+function requireLocalReview(db, id, args, action) {
+  const ticket = requireTicket(db, id);
+  if (ticket.type !== "task") return ticket;
+  if (ticket.local_review === "confirmed" || ticket.local_review === "skipped") return ticket;
+  const reason = typeof args.skip_local_review === "string" ? readValue(args.skip_local_review).trim() : "";
+  if (reason) {
+    db.prepare("UPDATE tickets SET local_review = 'skipped', updated_at = ? WHERE id = ?").run(now(), Number(id));
+    recordEvent(db, Number(id), "ticket.local_review_skipped", { action, reason, description: reason }, args.actor || "agent");
+    return requireTicket(db, id);
+  }
+  fail(
+    `${action} requires a confirmed local review (current: ${ticket.local_review}). ` +
+      `Request it with \`local-review ${id} --status requested --description "<changed files, verification result, local URL>"\`, ` +
+      `stop, and wait for the user to confirm in the UI or with \`local-review ${id} --status confirmed --actor user\`. ` +
+      `Pass --skip-local-review "<reason>" only when the user explicitly asked to skip it.`,
+  );
+}
+
+function localReview(db, id, args) {
+  const ticket = requireTicket(db, id);
+  if (ticket.type !== "task") fail("local-review applies to task tickets only");
+  const status = String(args.status || "");
+  if (!["requested", "changes_requested", "confirmed"].includes(status)) {
+    fail(`invalid local review status: ${status || "(none)"}. Expected requested, changes_requested, or confirmed`);
+  }
+  const description = eventDescription(args);
+  if (status === "requested" && !description.trim()) {
+    fail("local-review --status requested requires --description with the changed files, verification result, and how to review locally");
+  }
+  const actor = args.actor || (status === "confirmed" || status === "changes_requested" ? "user" : "agent");
+  const fields = { local_review: status, updated_at: now() };
+  if (status === "requested") fields.local_review_note = description;
+  const names = Object.keys(fields);
+  db.prepare(`UPDATE tickets SET ${names.map((name) => `${name} = ?`).join(", ")} WHERE id = ?`)
+    .run(...names.map((name) => fields[name]), Number(id));
+  recordEvent(db, Number(id), `ticket.local_review_${status}`, { from: ticket.local_review, to: status, description }, actor);
+  return requireTicket(db, id);
+}
+
 function addCommit(db, id, args) {
   if (!args.commit_hash) fail("add-commit requires --commit-hash");
+  requireLocalReview(db, id, args, "add-commit");
   const git = currentGit();
   const url = args.url || commitWebUrl(git.remote_url, args.commit_hash);
   db.prepare(`
@@ -974,7 +1025,7 @@ function addCommit(db, id, args) {
 }
 
 function updatePr(db, id, args) {
-  requireTicket(db, id);
+  requireLocalReview(db, id, args, "pr");
   const fields = {};
   for (const key of ["pr_url", "pr_number", "pr_status"]) {
     if (args[key] !== undefined) fields[key] = args[key] || null;
@@ -1354,6 +1405,7 @@ async function handleApi(req, res, db, notify = () => {}) {
     else if (action === "hold") result = transition(db, id, "hold", "ticket.status_changed", body);
     else if (action === "comment") result = commentTicket(db, id, body);
     else if (action === "questions") result = setOpenQuestions(db, id, body);
+    else if (action === "local-review") result = localReview(db, id, body);
     else if (action === "review") result = transition(db, id, "in_review", "ticket.review_requested", body);
     else if (action === "close") result = transition(db, id, "closed", "ticket.closed", body);
     else if (action === "cancel") result = transition(db, id, "cancelled", "ticket.status_changed", body);
@@ -1488,6 +1540,7 @@ function main() {
   if (command === "progress") return print(updateProgress(db, id, args), args.json, args.quiet);
   if (command === "progress-log") return print(progressLog(db, id, args), args.json, args.quiet ?? !args.json);
   if (command === "hold") return print(transition(db, id, "hold", "ticket.status_changed", args), args.json, args.quiet);
+  if (command === "local-review") return print(localReview(db, id, args), args.json, args.quiet ?? !args.json);
   if (command === "review") return print(transition(db, id, "in_review", "ticket.review_requested", args), args.json, args.quiet);
   if (command === "close") return print(transition(db, id, "closed", "ticket.closed", args), args.json, args.quiet);
   if (command === "cancel") return print(transition(db, id, "cancelled", "ticket.status_changed", args), args.json, args.quiet);

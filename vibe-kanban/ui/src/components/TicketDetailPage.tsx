@@ -3,6 +3,7 @@ import {
   ArrowLeftIcon,
   CheckIcon,
   ChevronRightIcon,
+  ClipboardCheckIcon,
   GitCommitHorizontalIcon,
   ImageIcon,
   MessageSquareTextIcon,
@@ -10,7 +11,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { eventLabel, eventSummary, eventTone } from "../lib/events";
-import { formatDate, formatKind, formatStatus, formatType, progressFor, ticketCode } from "../lib/format";
+import { formatDate, formatKind, formatLocalReview, formatStatus, formatType, progressFor, ticketCode } from "../lib/format";
 import { Markdown } from "../lib/markdown";
 import { kindTone, mutedTextClass, statusTone, ticketCodeClass, tone, typeTone } from "../lib/styles";
 import type { TicketDetail, TicketKind, TicketListItem, TicketStatus, TicketType } from "../types/kanban";
@@ -93,6 +94,7 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, kinds, onBa
   const [editKind, setEditKind] = useState<string>(ticket.kind || NONE);
   const [editParent, setEditParent] = useState<string>(ticket.parent_id ? String(ticket.parent_id) : NONE);
   const [comment, setComment] = useState("");
+  const [reviewNote, setReviewNote] = useState("");
   const [tab, setTab] = useState("overview");
   const parents = eligibleParents(editType, tickets, ticket.id);
   const progress = progressFor(ticket);
@@ -109,6 +111,9 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, kinds, onBa
   const hasExecutionPlan = executionPlan.trim().length > 0;
   const canApprove = hasExecutionPlan && planSteps.length > 0;
   const completedSteps = planSteps.filter((step) => step.status === "completed").length;
+  const localReview = ticket.local_review || "pending";
+  const reviewRequested = isTask && localReview === "requested";
+  const localReviewTone = localReview === "confirmed" ? "emerald" : localReview === "requested" ? "orange" : localReview === "changes_requested" ? "amber" : "neutral";
 
   useEffect(() => {
     setEditOpen(false);
@@ -117,6 +122,7 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, kinds, onBa
     setEditKind(ticket.kind || NONE);
     setEditParent(ticket.parent_id ? String(ticket.parent_id) : NONE);
     setComment("");
+    setReviewNote("");
     setTab("overview");
   }, [ticket.id, ticket.type, ticket.kind, ticket.parent_id]);
 
@@ -148,6 +154,7 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, kinds, onBa
             {isTask ? (
               <Badge tone={ticket.user_reviewed ? "emerald" : "orange"}>{ticket.user_reviewed ? "Approved" : "Needs review"}</Badge>
             ) : null}
+            {isTask && localReview !== "pending" ? <Badge tone={localReviewTone}>{formatLocalReview(localReview)}</Badge> : null}
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
@@ -177,6 +184,11 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, kinds, onBa
                 {canApprove ? "Approve this plan for implementation" : "The execution plan needs at least one top-level checklist step"}
               </TooltipContent>
             </Tooltip>
+          ) : null}
+          {reviewRequested ? (
+            <Button onClick={() => onAction(ticket.id, "local-review", { status: "confirmed", actor: "user" })}>
+              <ClipboardCheckIcon /> Confirm local review
+            </Button>
           ) : null}
           <Button variant="outline" onClick={() => setEditOpen(true)}>
             <PencilIcon /> Edit
@@ -307,6 +319,33 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, kinds, onBa
             </TabsList>
 
             <TabsContent value="overview" className="grid gap-4">
+              {isTask && localReview !== "pending" ? (
+                <SectionCard
+                  title={<span className={cn(reviewRequested && "text-orange-600 dark:text-orange-400")}>{formatLocalReview(localReview)}</span>}
+                  className={cn(reviewRequested && "border-orange-500/30 bg-orange-500/5")}
+                >
+                  {ticket.local_review_note ? <Markdown value={ticket.local_review_note} /> : <p className={mutedTextClass}>No review notes recorded.</p>}
+                  {reviewRequested ? (
+                    <form
+                      className="mt-4 grid gap-2"
+                      onSubmit={async (event) => {
+                        event.preventDefault();
+                        await onAction(ticket.id, "local-review", { status: "changes_requested", actor: "user", description: reviewNote.trim() || "Changes requested during local review" });
+                        setReviewNote("");
+                      }}
+                    >
+                      <p className="m-0 text-xs text-muted-foreground">Review the change locally first. Confirm to let the agent commit and open a PR, or send it back with notes.</p>
+                      <Textarea value={reviewNote} rows={3} placeholder="What should change before commit?" onChange={(event) => setReviewNote(event.target.value)} />
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button type="submit" variant="outline">Request changes</Button>
+                        <Button type="button" onClick={() => onAction(ticket.id, "local-review", { status: "confirmed", actor: "user" })}>
+                          <ClipboardCheckIcon /> Confirm local review
+                        </Button>
+                      </div>
+                    </form>
+                  ) : null}
+                </SectionCard>
+              ) : null}
               {openQuestions.trim() ? (
                 <SectionCard title={<span className="text-amber-600 dark:text-amber-400">Open questions</span>} className="border-amber-500/30 bg-amber-500/5">
                   <Markdown value={openQuestions} />

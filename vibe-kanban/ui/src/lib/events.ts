@@ -20,6 +20,10 @@ const labels: Record<string, string> = {
   "ticket.user_commented": "User commented",
   "ticket.questions_opened": "Questions opened",
   "ticket.review_requested": "Review requested",
+  "ticket.local_review_requested": "Local review requested",
+  "ticket.local_review_changes_requested": "Local review: changes requested",
+  "ticket.local_review_confirmed": "Local review confirmed",
+  "ticket.local_review_skipped": "Local review skipped",
   "ticket.closed": "Ticket closed",
 };
 
@@ -31,7 +35,8 @@ export function eventLabel(type: string): string {
 
 export function eventTone(type: string): string {
   if (type === "ticket.deleted" || type === "ticket.approval_invalidated") return "rose";
-  if (type === "ticket.created" || type === "ticket.approved" || type === "ticket.closed") return "emerald";
+  if (type === "ticket.created" || type === "ticket.approved" || type === "ticket.closed" || type === "ticket.local_review_confirmed") return "emerald";
+  if (type === "ticket.local_review_requested" || type === "ticket.local_review_changes_requested" || type === "ticket.local_review_skipped") return "orange";
   if (type === "ticket.questions_opened" || type === "ticket.user_commented") return "amber";
   if (type === "ticket.review_requested" || type === "ticket.pr_updated" || type === "ticket.pipeline_updated") return "orange";
   if (type === "ticket.status_changed" || type === "ticket.implementation_started") return "sky";

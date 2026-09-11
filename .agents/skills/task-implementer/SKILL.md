@@ -141,9 +141,15 @@ pnpm -s vk progress <task-ticket-id> --percent 10 --note "Implementation started
     pnpm -s vk progress-log <task-ticket-id> --step "<verification step label>" --step-status completed --description "<verification command and result>" --quiet
     ```
 
-24. Review the diff yourself, or with a review plugin the project prefers, then stop for mandatory local user review. Report the changed files, verification result, and local URL or command when relevant. Do not commit until the user confirms the local review is complete.
+24. Review the diff yourself, or with a review plugin the project prefers, then request the mandatory local user review through Vibe Kanban and stop. The description must list the changed files, the verification commands and results, and the local URL or command to try the change:
 
-25. After the user confirms local review, read [references/git-workflow.md](references/git-workflow.md) and use it to review the diff, stage only files that belong to the task, commit with a concise ticket-aware message, and add every relevant commit hash to the task ticket:
+    ```bash
+    pnpm -s vk local-review <task-ticket-id> --status requested --description @review.md --quiet
+    ```
+
+    Do not run `git commit`, `git push`, or `gh pr create` until `get <task-ticket-id> --json` shows `local_review = confirmed`. The user confirms in the UI or with `local-review <id> --status confirmed --actor user`; on `changes_requested`, address the notes, verify again, and request review again. `add-commit` and `pr` reject task tickets that are not confirmed, so a rejected `add-commit` means the gate was skipped: stop and request the review instead of pushing.
+
+25. After `local_review = confirmed`, read [references/git-workflow.md](references/git-workflow.md) and use it to review the diff, stage only files that belong to the task, commit with a concise ticket-aware message, and add every relevant commit hash to the task ticket:
 
     ```bash
     pnpm -s vk add-commit <task-ticket-id> --commit-hash <hash> --url <commit-url> --branch <branch> --message "<message>" --quiet
@@ -182,7 +188,7 @@ Pause and ask the user for confirmation whenever:
 - A needed dependency, API contract, external service, or permission model is unclear.
 - The implementation would expand scope beyond the approved task.
 - The `develop` branch is unavailable or not the correct base branch for the repository.
-- The mandatory local review has not been completed and confirmed by the user before commit.
+- The task's `local_review` is not `confirmed` and a commit, push, or PR is about to happen.
 - GitHub CLI is unavailable, unauthenticated, or no GitHub remote exists when PR creation is requested.
 
 Do not ask for confirmation for purely local, reversible engineering choices that do not change product behavior; record those as progress notes in Vibe Kanban.

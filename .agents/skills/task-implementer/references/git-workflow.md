@@ -43,18 +43,25 @@ If the branch already exists, inspect it instead of recreating it. Confirm it is
 
 ## Local Review Gate
 
-After coding, verification, and commit, give the user a chance to review locally before opening a PR when either condition applies:
+The local review happens **before the first commit**, for every task, and Vibe Kanban enforces it: `add-commit` and `pr` refuse task tickets whose `local_review` is not `confirmed`.
 
-- The user asked to review locally before PR.
-- The task is UI-heavy, risky, broad, or would benefit from a manual local pass.
+1. After focused verification, record the review request and stop:
 
-At this gate, report the branch, commit hash, verification result, and local URL or command when relevant. Do not create the PR until the user confirms.
+   ```bash
+   pnpm -s vk local-review <task-ticket-id> --status requested --description @review.md --quiet
+   ```
 
-If the user previously asked for fully automatic PR creation after task completion, continue to PR creation after the commit and verification unless a stop condition applies.
+   The description lists the changed files, the verification commands and results, and the local URL or command the user can use to try the change. Do not run `git commit`, `git push`, or `gh pr create` after this point.
+
+2. The user reviews locally and either confirms (UI button "Confirm local review", or `pnpm -s vk local-review <id> --status confirmed --actor user`) or sends it back (`--status changes_requested --description "<notes>"`). On changes requested, address the notes, verify again, and request review again.
+
+3. Only when `get <id> --json` shows `local_review = confirmed` continue to Commit below.
+
+Skipping is not a workflow option. `--skip-local-review "<reason>"` exists on `add-commit` and `pr` only for the case where the user explicitly said in the current conversation that this task may be committed without a local pass; the reason is recorded on the ticket.
 
 ## Commit
 
-After implementation and verification:
+Only after the local review is confirmed (see the gate above):
 
 1. Review the diff with `git status --short` and a focused diff command.
 2. Stage only task-related files.
@@ -71,7 +78,7 @@ pnpm -s vk add-commit <task-ticket-id> --commit-hash <hash> --url <commit-url> -
 pnpm -s vk progress-log <task-ticket-id> --step "Commit implementation" --description "Recorded commit <hash>" --quiet
 ```
 
-Pass the canonical web URL for each commit when a remote repository is available so ticket detail can navigate directly to it. The UI can derive GitHub/GitLab commit links from the PR URL as a fallback.
+Pass the canonical web URL for each commit when a remote repository is available so ticket detail can navigate directly to it. The UI can derive GitHub/GitLab commit links from the PR URL as a fallback. If `add-commit` is rejected with "requires a confirmed local review", the review step was skipped: do not push, request the review, and record the commit only after confirmation.
 
 If there are no changes after verification, do not create an empty commit unless the user explicitly asked for one.
 

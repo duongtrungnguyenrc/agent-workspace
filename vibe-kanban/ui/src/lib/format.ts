@@ -28,6 +28,14 @@ export function formatStatus(status: TicketStatus | string): string {
   return String(status || "").replace("_", " ");
 }
 
+export function formatLocalReview(state: string | null | undefined): string {
+  if (state === "requested") return "Local review requested";
+  if (state === "changes_requested") return "Changes requested";
+  if (state === "confirmed") return "Local review confirmed";
+  if (state === "skipped") return "Local review skipped";
+  return "Local review pending";
+}
+
 export function ticketCode(
   ticket: Pick<TicketListItem, "id" | "type">,
 ): string {

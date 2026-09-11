@@ -26,6 +26,7 @@ pnpm -s vk <command>
 - Task execution plans use top-level Markdown checklist items (`- [ ]` at column 0). Indented checklist items are supporting detail, not steps. The tool derives ordered plan steps and preserves their state when unchanged checklist labels remain in a revised plan.
 - `approve` rejects a task whose execution plan has no top-level checklist item. Rewrite prose plans as checklists before asking for approval.
 - Update a step with `progress-log <id> --step <number|exact label> --step-status <pending|in_progress|completed|blocked> --description <text> --quiet`. Omit `--percent` on step updates; the tool derives `progress_percent` from completed steps. Pass `--percent` only on lifecycle milestones before the first step starts, and never lower a percent the checklist already reached.
+- Task tickets carry `local_review` (`pending`, `requested`, `changes_requested`, `confirmed`, `skipped`). Agents request it with `local-review <id> --status requested --description <changed files, verification, local URL>`; users confirm in the UI or with `--status confirmed --actor user`. `add-commit` and `pr` refuse task tickets that are not `confirmed` or `skipped`; `--skip-local-review <reason>` is only for an explicit user instruction and is recorded as an event. A spec or plan change resets the state to `pending`.
 - `delete` removes a ticket with its revisions, commits, and plan steps, refuses when children exist unless `--cascade` is passed, and records a `ticket.deleted` audit event. Ask the user before deleting tickets the agent did not create in the current conversation.
 - Every mutation records an event. The local server emits `tickets:changed` for API and CLI writes so the UI can refresh, notify, and monitor checklist progress in real time.
 - Pass `--description` on status, progress, PR, pipeline, and action changes so activity and realtime UI messages remain useful.
@@ -48,6 +49,7 @@ Common reads and trace writes:
 pnpm -s vk get <id> --json
 pnpm -s vk activity --limit 50 --json
 pnpm -s vk progress-log <id> --step 1 --step-status in_progress --description "Started step" --quiet
+pnpm -s vk local-review <id> --status requested --description @review.md --quiet
 pnpm -s vk add-commit <id> --commit-hash <hash> --url <commit-url> --branch <branch> --message <message> --quiet
 pnpm -s vk pr <id> --pr-url <url> --pr-status open --description "PR created" --quiet
 ```

@@ -148,7 +148,7 @@ flowchart TD
 9. Stop and ask for user direction when analysis exposes competing intents, unclear scope, ambiguous hierarchy, or materially different implementation risks.
 10. When implementation is requested, use `task-implementer` to scan the current codebase and create approval-ready `task` tickets with execution plans.
 11. Implement only approved task execution plans under `source/**`, except for explicitly approved workspace-level supporting changes.
-12. Run focused verification, stop for mandatory local user review, then commit only after confirmation.
+12. Run focused verification, record the local review request in Vibe Kanban (`local-review --status requested`), and stop; commit only after the user confirms. `add-commit` and `pr` refuse tasks that were not confirmed.
 13. Push the branch and create a PR with GitHub CLI when required.
 
 ## Workspace Structure

@@ -22,6 +22,13 @@ export type GroupBy =
   | "branch"
   | "parent";
 
+export type LocalReviewState =
+  | "pending"
+  | "requested"
+  | "changes_requested"
+  | "confirmed"
+  | "skipped";
+
 export interface SourceEvidence {
   type: "link" | "image";
   url: string;
@@ -63,6 +70,8 @@ export interface TicketListItem {
   source_evidence: SourceEvidence[];
   user_comments: string;
   open_questions: string;
+  local_review: LocalReviewState;
+  local_review_note: string;
   branch: string | null;
   base_commit: string | null;
   head_commit: string | null;

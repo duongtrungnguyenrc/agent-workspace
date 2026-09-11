@@ -317,6 +317,7 @@ vibe-kanban start <ticket-id> --description <text> --quiet
 vibe-kanban progress <ticket-id> --percent <0-100> --note <text> --description <text> --quiet
 vibe-kanban progress-log <ticket-id> --step <name|number> --step-status <pending|in_progress|completed|blocked> --description <text> --percent <0-100> --quiet
 vibe-kanban hold <ticket-id> --description <text> --quiet
+vibe-kanban local-review <ticket-id> --status <requested|changes_requested|confirmed> --description <text> --actor <name> --quiet
 vibe-kanban review <ticket-id> --description <text> --quiet
 vibe-kanban close <ticket-id> --description <text> --quiet
 vibe-kanban pr <ticket-id> --pr-url <url> --pr-status <status> --description <text> --quiet
@@ -339,6 +340,8 @@ JSON should include enough ticket, specification, plan, approval, status, Git, a
 `detect-kind` exposes the kind heuristic on its own so an agent can classify a request before creating a ticket.
 
 The `approve` and `start` commands must apply only to `task` tickets. The `start` command must enforce the approval gate: if the current execution plan is not approved, fail with a clear message and leave the ticket unchanged.
+
+Task tickets also carry a local review gate. `local_review` moves `pending -> requested` when the agent records what to review (`local_review_note` keeps the description), then `confirmed` or `changes_requested` by the user (UI action or CLI with `--actor user`). `add-commit` and `pr` must fail for task tickets unless `local_review` is `confirmed` or `skipped`; `--skip-local-review <reason>` sets `skipped` and records `ticket.local_review_skipped` so an explicit user instruction stays auditable. A specification or execution plan change resets the state to `pending`. Each transition records `ticket.local_review_<state>`.
 
 The `comment` command appends a timestamped user comment and should not change approval state by itself. The `questions` command replaces the current open questions, moves the ticket to `hold`, and preserves the blocking questions for the user and agent. Agents should use any available human-notification skill or tool after writing open questions; if none exists, the current conversation is the fallback notification channel.
 

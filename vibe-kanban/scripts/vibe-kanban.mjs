@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, mkdirSync, watchFile, unwatchFile } from "node:fs";
+import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -148,6 +148,11 @@ function openDb() {
   const path = dbPath();
   mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
+  // The local server keeps a long-lived connection while agents run CLI commands against the same file.
+  // WAL lets readers and one writer overlap, and busy_timeout makes both sides wait instead of failing with "database is locked".
+  db.exec("PRAGMA busy_timeout = 5000");
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA synchronous = NORMAL");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(`
     CREATE TABLE IF NOT EXISTS tickets (
@@ -1387,13 +1392,27 @@ function serve(args) {
   const indexPath = join(dist, "index.html");
   let lastEventId = Number(db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM ticket_events").get().id);
   // Every mutation (API or CLI) records ticket events, so the event tail is the single notification source.
+  // A failed poll (for example a CLI write holding the lock longer than busy_timeout) is logged and retried on the next tick.
   const emitNewEvents = (source) => {
-    for (const event of activityAfter(db, lastEventId)) {
-      lastEventId = event.id;
-      io.emit("tickets:changed", { ...event, source, updated_at: event.created_at });
+    try {
+      for (const event of activityAfter(db, lastEventId)) {
+        lastEventId = event.id;
+        io.emit("tickets:changed", { ...event, source, updated_at: event.created_at });
+      }
+    } catch (error) {
+      console.error(`[vibe-kanban] event poll failed (${source}): ${error.message}`);
     }
   };
   const server = createServer((req, res) => {
+    try {
+      handleRequest(req, res);
+    } catch (error) {
+      console.error(`[vibe-kanban] request failed: ${error.message}`);
+      if (!res.headersSent) send(res, 500, { error: error.message }, { "content-type": "application/json" });
+      else res.end();
+    }
+  });
+  const handleRequest = (req, res) => {
     const url = new URL(req.url, "http://local");
     if (url.pathname.startsWith("/api/")) return handleApi(req, res, db, () => emitNewEvents("api"));
     if (
@@ -1417,19 +1436,30 @@ function serve(args) {
       return send(res, 200, readFileSync(assetPath), { "content-type": contentType(assetPath) });
     }
     return send(res, 404, "not found", { "content-type": "text/plain" });
-  });
+  };
   const io = new SocketServer(server, {
     cors: { origin: "*" },
   });
   io.on("connection", (socket) => {
     socket.emit("tickets:ready", { connected: true });
   });
-  watchFile(databasePath, { interval: 500 }, (current, previous) => {
-    if (current.mtimeMs === previous.mtimeMs) return;
-    emitNewEvents("sqlite");
-  });
+  // CLI writes land in the WAL file, so the main database file's mtime is not a reliable change signal.
+  // Poll the event tail instead; the query is indexed on the primary key and returns nothing when idle.
+  const poll = setInterval(() => emitNewEvents("sqlite"), 500);
   server.on("close", () => {
-    unwatchFile(databasePath);
+    clearInterval(poll);
+  });
+  // A local dev server should log unexpected errors rather than die while agents are mid-workflow.
+  process.on("uncaughtException", (error) => {
+    console.error(`[vibe-kanban] uncaught exception: ${error.stack || error.message}`);
+  });
+  process.on("unhandledRejection", (reason) => {
+    console.error(`[vibe-kanban] unhandled rejection: ${reason instanceof Error ? reason.stack : String(reason)}`);
+  });
+  // Failing to bind (port in use, bad host) must exit rather than be swallowed by the guards above.
+  server.on("error", (error) => {
+    console.error(`[vibe-kanban] cannot listen on ${host}:${port}: ${error.message}`);
+    process.exit(1);
   });
   server.listen(port, host, () => {
     console.log(`Vibe Kanban running at http://${host}:${server.address().port}`);
@@ -1477,6 +1507,10 @@ try {
   if (error instanceof VibeKanbanError) {
     console.error(error.message);
     process.exit(error.code);
+  }
+  if (error && error.code === "ERR_SQLITE_ERROR" && /locked|busy/i.test(String(error.message))) {
+    console.error(`database is busy (${error.message}); another process held the lock for more than 5s. Retry the command.`);
+    process.exit(3);
   }
   throw error;
 }

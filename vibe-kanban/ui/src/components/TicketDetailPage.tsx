@@ -273,8 +273,8 @@ export function TicketDetailPage({ ticket, tickets, statuses, types, kinds, onBa
             <Property label="System" value={ticket.source_type} />
             <Property label="Id" value={ticket.source_id} />
             <Property label="URL" value={<ExternalLink url={ticket.source_url} />} />
-            <div className="mt-3 max-h-44 overflow-auto rounded-lg bg-muted/60 p-3 text-sm leading-6 text-foreground/80">
-              {sourceSnapshot ? <LinkText value={sourceSnapshot} /> : <span className="text-muted-foreground">No source snapshot.</span>}
+            <div className="mt-3 max-h-72 overflow-auto rounded-lg bg-muted/60 p-3">
+              {sourceSnapshot ? <Markdown value={sourceSnapshot} /> : <span className="text-sm text-muted-foreground">No source snapshot.</span>}
             </div>
             {sourceEvidence.length ? (
               <div className="mt-3 grid gap-3">

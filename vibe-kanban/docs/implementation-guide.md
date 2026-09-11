@@ -408,6 +408,7 @@ Expose a global activity endpoint and page from server-managed ticket events. Ag
 - Theme tokens live in `ui/src/styles.css` as light and `.dark` CSS variables mapped through `@theme inline`. This is the only handwritten CSS; everything else stays in Tailwind utility classes. `next-themes` toggles `.dark` on the root element with system detection.
 - Ticket tones (type, kind, status) live in `ui/src/lib/styles.ts` as `Tone` keys with light and dark class sets. Use `tone(name).badge|fill|accent|text|soft` instead of inlining color classes.
 - ReactBits components are vendored under `ui/src/components/reactbits/` (`CountUp` for stat tiles, `SpotlightCard` for ticket cards, adapted to theme tokens). Add new ReactBits pieces with `pnpm dlx shadcn@latest add https://reactbits.dev/r/<Name>-TS-TW.json`, then adapt hardcoded colors to tokens.
+- Markdown fields (specification, execution plan, open questions, comments, action items, review notes, source snapshot) render through `react-markdown` with `remark-gfm` (tables, task lists, strikethrough, autolinks) and `remark-breaks` (single newlines become line breaks, matching how agents write). Element styling lives in `ui/src/lib/markdown.tsx` as a `components` map over theme tokens; raw HTML is never rendered.
 - Notifications use `sonner`; create and edit forms open in `Sheet` side panels; destructive confirmation uses `AlertDialog`; ticket detail groups content in `Tabs` (Overview, Plan, Delivery, Activity).
 
 ## Validation
